@@ -3,7 +3,7 @@ use std::io::{self, Write};
 
 fn main() {
     let mut buffer = String::new();
-    let mut trimmer_buffer;
+    let mut user_inputs: Vec<&str>;
 
     loop {
         buffer.clear();
@@ -13,12 +13,13 @@ fn main() {
 
         let _ = io::stdin().read_line(&mut buffer);
 
-        trimmer_buffer = buffer.trim();
+        user_inputs = buffer.split_whitespace().collect();
 
-        if trimmer_buffer == "exit" {
-            return;
+        match user_inputs.first() {
+            Some(&"exit") => return,
+            Some(&"echo") => println!("{}", user_inputs[1..].join(" ")),
+            Some(x) => println!("{x}: command not found"),
+            _ => println!(": command not found"),
         }
-
-        println!("{}: command not found", trimmer_buffer);
     }
 }
