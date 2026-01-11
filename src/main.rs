@@ -79,7 +79,7 @@ fn main() {
 
                 if set_current_dir(&path).is_err() {
                     println!(
-                        "cd: {:?}: No such file or directory",
+                        "cd: {}: No such file or directory",
                         path.to_str().expect("Should be valid UTF-8")
                     );
                 }
