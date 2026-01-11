@@ -66,7 +66,7 @@ fn main() {
                     .output()
                 {
                     Ok(output) => print!("{}", String::from_utf8_lossy(&output.stdout)),
-                    Err(_) => println!("{command} failed to start"),
+                    Err(_) => println!("{command}: not found"),
                 }
             }
             _ => (),
