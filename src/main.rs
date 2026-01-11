@@ -30,7 +30,7 @@ fn main() {
         })
         .unwrap_or_default();
 
-    let builtins = ["exit", "echo", "type"];
+    let builtins = ["exit", "echo", "type", "pwd"];
 
     loop {
         buffer.clear();
@@ -60,6 +60,13 @@ fn main() {
                     }
                 }
             }
+            Some(&"pwd") => println!(
+                "{}",
+                std::env::current_dir()
+                    .expect("Should be a valid working directory")
+                    .to_str()
+                    .expect("Should be valid UTF-8")
+            ),
             Some(command) => {
                 match Command::new(command)
                     .args(user_inputs.iter().skip(1).map(OsStr::new))
