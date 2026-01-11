@@ -1,8 +1,10 @@
 use std::env::{split_paths, var};
+use std::ffi::OsStr;
 use std::fs::DirEntry;
 use std::io::{self, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
+use std::process::Command;
 
 fn is_executable_with_name(dir_entry: &DirEntry, name: &str) -> bool {
     if dir_entry.file_name() == name
@@ -58,7 +60,15 @@ fn main() {
                     }
                 }
             }
-            Some(x) => println!("{x}: command not found"),
+            Some(command) => {
+                match Command::new(command)
+                    .args(user_inputs.iter().skip(1).map(OsStr::new))
+                    .output()
+                {
+                    Ok(output) => print!("{}", String::from_utf8_lossy(&output.stdout)),
+                    Err(_) => println!("{command} failed to start"),
+                }
+            }
             _ => (),
         }
     }
