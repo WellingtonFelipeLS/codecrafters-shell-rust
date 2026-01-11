@@ -1,9 +1,10 @@
-use std::env::{split_paths, var};
+use std::collections::HashSet;
+use std::env::{set_current_dir, split_paths, var};
 use std::ffi::OsStr;
 use std::fs::DirEntry;
 use std::io::{self, Write};
 use std::os::unix::fs::PermissionsExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn is_executable_with_name(dir_entry: &DirEntry, name: &str) -> bool {
@@ -30,7 +31,7 @@ fn main() {
         })
         .unwrap_or_default();
 
-    let builtins = ["exit", "echo", "type", "pwd"];
+    let builtins = HashSet::from(["exit", "echo", "type", "pwd", "cd"]);
 
     loop {
         buffer.clear();
@@ -67,6 +68,22 @@ fn main() {
                     .to_str()
                     .expect("Should be valid UTF-8")
             ),
+            Some(&"cd") => {
+                let path = if let Some(path) = user_inputs.get(1)
+                    && *path != "~"
+                {
+                    PathBuf::from(path)
+                } else {
+                    std::env::home_dir().expect("Home directory env variable should be set")
+                };
+
+                if set_current_dir(&path).is_err() {
+                    println!(
+                        "cd: {:?}: No such file or directory",
+                        path.to_str().expect("Should be valid UTF-8")
+                    );
+                }
+            }
             Some(command) => {
                 match Command::new(command)
                     .args(user_inputs.iter().skip(1).map(OsStr::new))
