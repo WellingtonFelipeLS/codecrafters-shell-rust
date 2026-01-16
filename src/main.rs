@@ -18,6 +18,15 @@ fn is_executable_with_name(dir_entry: &DirEntry, name: &str) -> bool {
     }
 }
 
+fn read_user_input(buffer: &str) -> Vec<&str> {
+    let num_quotes = buffer.chars().filter(|&x| x == '\'').count();
+    if num_quotes % 2 == 0 && num_quotes != 0 {
+        buffer.split('\'').map(str::trim).collect()
+    } else {
+        buffer.split_whitespace().collect()
+    }
+}
+
 fn main() {
     let mut buffer = String::new();
     let mut user_inputs: Vec<&str>;
@@ -41,7 +50,7 @@ fn main() {
 
         let _ = io::stdin().read_line(&mut buffer);
 
-        user_inputs = buffer.split_whitespace().collect();
+        user_inputs = read_user_input(&buffer);
 
         match user_inputs.first() {
             Some(&"exit") => return,
