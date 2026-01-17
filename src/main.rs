@@ -18,18 +18,25 @@ fn is_executable_with_name(dir_entry: &DirEntry, name: &str) -> bool {
     }
 }
 
-fn read_user_input(buffer: &str) -> Vec<&str> {
-    let num_quotes = buffer.chars().filter(|&x| x == '\'').count();
+fn read_user_input(buffer: &str) -> Vec<String> {
+    let filtered_buffer = buffer.replace("\'\'", "");
+    let num_quotes = filtered_buffer.chars().filter(|&x| x == '\'').count();
     if num_quotes % 2 == 0 && num_quotes != 0 {
-        buffer.split('\'').map(str::trim).collect()
+        filtered_buffer
+            .split('\'')
+            .map(|x| x.trim().to_owned())
+            .collect()
     } else {
-        buffer.split_whitespace().collect()
+        filtered_buffer
+            .split_whitespace()
+            .map(ToOwned::to_owned)
+            .collect()
     }
 }
 
 fn main() {
     let mut buffer = String::new();
-    let mut user_inputs: Vec<&str>;
+    let mut user_inputs;
 
     let path_variable: Vec<DirEntry> = var("PATH")
         .map(|paths| {
@@ -52,12 +59,12 @@ fn main() {
 
         user_inputs = read_user_input(&buffer);
 
-        match user_inputs.first() {
-            Some(&"exit") => return,
-            Some(&"echo") => println!("{}", user_inputs[1..].join(" ")),
-            Some(&"type") => {
+        match user_inputs.first().map(String::as_str) {
+            Some("exit") => return,
+            Some("echo") => println!("{}", user_inputs[1..].join(" ")),
+            Some("type") => {
                 if let Some(command) = user_inputs.get(1) {
-                    if builtins.contains(command) {
+                    if builtins.contains(command.as_str()) {
                         println!("{command} is a shell builtin")
                     } else if let Some(dir_entry) = path_variable
                         .iter()
@@ -70,14 +77,14 @@ fn main() {
                     }
                 }
             }
-            Some(&"pwd") => println!(
+            Some("pwd") => println!(
                 "{}",
                 std::env::current_dir()
                     .expect("Should be a valid working directory")
                     .to_str()
                     .expect("Should be valid UTF-8")
             ),
-            Some(&"cd") => {
+            Some("cd") => {
                 let path = if let Some(path) = user_inputs.get(1)
                     && *path != "~"
                 {
