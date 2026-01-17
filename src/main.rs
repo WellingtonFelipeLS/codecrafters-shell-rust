@@ -25,6 +25,7 @@ fn read_user_input(buffer: &str) -> Vec<String> {
         filtered_buffer
             .split('\'')
             .map(|x| x.trim().to_owned())
+            .filter(|x| !x.is_empty())
             .collect()
     } else {
         filtered_buffer
