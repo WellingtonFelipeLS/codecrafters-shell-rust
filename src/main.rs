@@ -22,10 +22,16 @@ fn read_user_input(buffer: &str) -> Vec<String> {
     let mut result = Vec::new();
     let mut open_single_quote = false;
     let mut open_double_quote = false;
+    let mut backslashed = false;
     let mut arg_buffer = String::new();
 
     for c in buffer.chars() {
         match c {
+            x if backslashed => {
+                arg_buffer.push(x);
+                backslashed = false;
+            }
+            '\\' => backslashed = true,
             '\'' => {
                 if open_double_quote {
                     arg_buffer.push(c);
