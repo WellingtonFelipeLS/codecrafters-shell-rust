@@ -27,7 +27,11 @@ fn read_user_input(buffer: &str) -> Vec<String> {
     for c in buffer.chars() {
         match c {
             '\'' => {
-                open_single_quote = !open_single_quote;
+                if open_double_quote {
+                    arg_buffer.push(c);
+                } else {
+                    open_single_quote = !open_single_quote;
+                }
             }
             '\"' => {
                 open_double_quote = !open_double_quote;
