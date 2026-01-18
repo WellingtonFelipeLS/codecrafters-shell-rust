@@ -33,7 +33,7 @@ fn read_user_input(buffer: &str) -> Vec<String> {
                 open_double_quote = !open_double_quote;
             }
             x if x.is_whitespace() => {
-                if open_single_quote {
+                if open_single_quote || open_double_quote {
                     arg_buffer.push(x);
                 } else if !arg_buffer.is_empty() {
                     result.push(arg_buffer.clone());
