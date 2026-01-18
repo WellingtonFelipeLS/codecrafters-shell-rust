@@ -19,20 +19,34 @@ fn is_executable_with_name(dir_entry: &DirEntry, name: &str) -> bool {
 }
 
 fn read_user_input(buffer: &str) -> Vec<String> {
-    let filtered_buffer = buffer.replace("\'\'", "");
-    let num_quotes = filtered_buffer.chars().filter(|&x| x == '\'').count();
-    if num_quotes % 2 == 0 && num_quotes != 0 {
-        filtered_buffer
-            .split('\'')
-            .map(|x| x.trim().to_owned())
-            .filter(|x| !x.is_empty())
-            .collect()
-    } else {
-        filtered_buffer
-            .split_whitespace()
-            .map(ToOwned::to_owned)
-            .collect()
+    let mut result = Vec::new();
+    let mut open_single_quote = false;
+    let mut open_double_quote = false;
+    let mut arg_buffer = String::new();
+
+    for c in buffer.chars() {
+        match c {
+            '\'' => {
+                open_single_quote = !open_single_quote;
+            }
+            '\"' => {
+                open_double_quote = !open_double_quote;
+            }
+            x if x.is_whitespace() => {
+                if open_single_quote {
+                    arg_buffer.push(x);
+                } else if !arg_buffer.is_empty() {
+                    result.push(arg_buffer.clone());
+                    arg_buffer.clear();
+                }
+            }
+            x => {
+                arg_buffer.push(x);
+            }
+        }
     }
+
+    result
 }
 
 fn main() {
