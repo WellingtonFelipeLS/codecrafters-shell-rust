@@ -27,41 +27,75 @@ fn read_user_input(buffer: &str) -> Vec<String> {
 
     for c in buffer.chars() {
         match c {
-            x if escaped => {
-                arg_buffer.push(x);
-                escaped = false;
-            }
             '\\' => {
-                if open_single_quote || (open_double_quote && escaped) {
+                if open_single_quote {
                     arg_buffer.push(c);
+                } else if open_double_quote {
+                    if escaped {
+                        arg_buffer.push(c);
+                        escaped = false;
+                    } else {
+                        escaped = true;
+                    }
                 } else {
-                    escaped = true
+                    escaped = true;
                 }
             }
             '\'' => {
                 if open_double_quote {
+                    if escaped {
+                        arg_buffer.push('\\');
+                        escaped = false;
+                    }
                     arg_buffer.push(c);
+                } else if escaped {
+                    arg_buffer.push(c);
+                    escaped = false;
                 } else {
                     open_single_quote = !open_single_quote;
                 }
             }
             '\"' => {
-                if open_single_quote || (open_double_quote && escaped) {
+                if open_single_quote {
                     arg_buffer.push(c);
+                } else if open_double_quote {
+                    if escaped {
+                        arg_buffer.push(c);
+                        escaped = false;
+                    } else {
+                        open_double_quote = false;
+                    }
+                } else if escaped {
+                    arg_buffer.push(c);
+                    escaped = false;
                 } else {
                     open_double_quote = !open_double_quote;
                 }
             }
             x if x.is_whitespace() => {
-                if open_single_quote || open_double_quote {
+                if open_single_quote {
                     arg_buffer.push(x);
+                } else if open_double_quote {
+                    if escaped {
+                        arg_buffer.push('\\');
+                        escaped = false;
+                    }
+                    arg_buffer.push(x);
+                } else if escaped {
+                    arg_buffer.push(x);
+                    escaped = false;
                 } else if !arg_buffer.is_empty() {
                     result.push(arg_buffer.clone());
                     arg_buffer.clear();
                 }
             }
             x => {
+                if open_double_quote && escaped {
+                    arg_buffer.push('\\');
+                }
+
                 arg_buffer.push(x);
+                escaped = false;
             }
         }
     }
