@@ -208,7 +208,15 @@ fn main_loop(
                 .args(user_inputs.iter().skip(1).map(OsStr::new))
                 .output()
             {
-                Ok(out) => write!(output, "{}", String::from_utf8_lossy(&out.stdout)),
+                Ok(out) => {
+                    let out = if let Some(0) = out.status.code() {
+                        out.stdout
+                    } else {
+                        out.stderr
+                    };
+
+                    write!(output, "{}", String::from_utf8_lossy(&out))
+                }
                 Err(_) => writeln!(output, "{command}: not found"),
             }
         }
