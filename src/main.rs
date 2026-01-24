@@ -58,6 +58,8 @@ fn read_user_input(buffer: &str) -> Vec<String> {
                     } else {
                         escaped = true;
                     }
+                } else if escaped {
+                    arg_buffer.push(c);
                 } else {
                     escaped = true;
                 }
