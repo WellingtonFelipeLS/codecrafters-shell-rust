@@ -209,13 +209,12 @@ fn main_loop(
                 .output()
             {
                 Ok(out) => {
-                    let out = if let Some(0) = out.status.code() {
-                        out.stdout
+                    if let Some(0) = out.status.code() {
+                        write!(output, "{}", String::from_utf8_lossy(&out.stdout))
                     } else {
-                        out.stderr
-                    };
-
-                    write!(output, "{}", String::from_utf8_lossy(&out))
+                        print!("{}", String::from_utf8_lossy(&out.stderr));
+                        Ok(())
+                    }
                 }
                 Err(_) => writeln!(output, "{command}: not found"),
             }
