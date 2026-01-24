@@ -178,6 +178,10 @@ fn main_loop(
             OutputDirection::Stdout(io::stdout()),
             ErrDirection::File(File::create(file_name)?),
         ),
+        (Some("2>>"), Some(file_name)) => (
+            OutputDirection::Stdout(io::stdout()),
+            ErrDirection::File(File::options().append(true).create(true).open(file_name)?),
+        ),
         _ => {
             if let Some(x) = possible_redirect_operator {
                 user_inputs.push(x);
