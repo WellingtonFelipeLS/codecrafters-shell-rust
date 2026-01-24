@@ -2,28 +2,49 @@ use std::collections::HashSet;
 use std::env::{set_current_dir, split_paths, var};
 use std::ffi::OsStr;
 use std::fs::{DirEntry, File};
-use std::io::{self, Stdout, Write};
+use std::io::{self, Stderr, Stdout, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, exit};
 
-enum Output {
+enum OutputDirection {
     File(File),
     Stdout(Stdout),
 }
 
-impl Write for Output {
+enum ErrDirection {
+    File(File),
+    Stderr(Stderr),
+}
+
+impl Write for OutputDirection {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         match self {
-            Output::File(file) => file.write(buf),
-            Output::Stdout(stdout) => stdout.write(buf),
+            OutputDirection::File(file) => file.write(buf),
+            OutputDirection::Stdout(stdout) => stdout.write(buf),
         }
     }
 
     fn flush(&mut self) -> io::Result<()> {
         match self {
-            Output::File(file) => file.flush(),
-            Output::Stdout(stdout) => stdout.flush(),
+            OutputDirection::File(file) => file.flush(),
+            OutputDirection::Stdout(stdout) => stdout.flush(),
+        }
+    }
+}
+
+impl Write for ErrDirection {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        match self {
+            ErrDirection::File(file) => file.write(buf),
+            ErrDirection::Stderr(stderr) => stderr.write(buf),
+        }
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        match self {
+            ErrDirection::File(file) => file.flush(),
+            ErrDirection::Stderr(stderr) => stderr.flush(),
         }
     }
 }
@@ -141,45 +162,56 @@ fn main_loop(
     let possible_file_name = user_inputs.pop();
     let possible_redirect_operator = user_inputs.pop();
 
-    let mut output = if let (Some(">" | "1>"), Some(file_name)) = (
+    let (mut output_direction, mut err_direction) = match (
         possible_redirect_operator.as_deref(),
         possible_file_name.as_ref(),
     ) {
-        Output::File(File::create(file_name)?)
-    } else {
-        if let Some(x) = possible_redirect_operator {
-            user_inputs.push(x);
-        }
+        (Some(">" | "1>"), Some(file_name)) => (
+            OutputDirection::File(File::create(file_name)?),
+            ErrDirection::Stderr(io::stderr()),
+        ),
+        (Some("2>"), Some(file_name)) => (
+            OutputDirection::Stdout(io::stdout()),
+            ErrDirection::File(File::create(file_name)?),
+        ),
+        _ => {
+            if let Some(x) = possible_redirect_operator {
+                user_inputs.push(x);
+            }
 
-        if let Some(x) = possible_file_name {
-            user_inputs.push(x);
-        }
+            if let Some(x) = possible_file_name {
+                user_inputs.push(x);
+            }
 
-        Output::Stdout(io::stdout())
+            (
+                OutputDirection::Stdout(io::stdout()),
+                ErrDirection::Stderr(io::stderr()),
+            )
+        }
     };
 
     match user_inputs.first().map(String::as_str) {
         Some("exit") => exit(0),
-        Some("echo") => writeln!(output, "{}", user_inputs[1..].join(" ")),
+        Some("echo") => writeln!(output_direction, "{}", user_inputs[1..].join(" ")),
         Some("type") => {
             if let Some(command) = user_inputs.get(1) {
                 if builtins.contains(command.as_str()) {
-                    writeln!(output, "{command} is a shell builtin")
+                    writeln!(output_direction, "{command} is a shell builtin")
                 } else if let Some(dir_entry) = path_variable
                     .iter()
                     .find(|dir_entry| is_executable_with_name(dir_entry, command))
                     && let Some(path) = dir_entry.path().to_str()
                 {
-                    writeln!(output, "{} is {}", command, path)
+                    writeln!(output_direction, "{} is {}", command, path)
                 } else {
-                    writeln!(output, "{}: not found", command)
+                    writeln!(err_direction, "{}: not found", command)
                 }
             } else {
                 Ok(())
             }
         }
         Some("pwd") => writeln!(
-            output,
+            output_direction,
             "{}",
             std::env::current_dir()
                 .expect("Should be a valid working directory")
@@ -197,7 +229,7 @@ fn main_loop(
 
             if set_current_dir(&path).is_err() {
                 writeln!(
-                    output,
+                    err_direction,
                     "cd: {}: No such file or directory",
                     path.to_str().expect("Should be valid UTF-8")
                 )
@@ -211,13 +243,8 @@ fn main_loop(
                 .output()
             {
                 Ok(out) => {
-                    if let Some(code) = out.status.code()
-                        && code != 0
-                    {
-                        print!("{}", String::from_utf8_lossy(&out.stderr));
-                    };
-
-                    write!(output, "{}", String::from_utf8_lossy(&out.stdout))
+                    write!(output_direction, "{}", String::from_utf8_lossy(&out.stdout))?;
+                    write!(err_direction, "{}", String::from_utf8_lossy(&out.stderr))
                 }
                 Err(_) => {
                     println!("{command}: not found");
