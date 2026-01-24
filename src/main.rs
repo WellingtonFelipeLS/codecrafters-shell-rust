@@ -170,6 +170,10 @@ fn main_loop(
             OutputDirection::File(File::create(file_name)?),
             ErrDirection::Stderr(io::stderr()),
         ),
+        (Some(">>" | "1>>"), Some(file_name)) => (
+            OutputDirection::File(File::options().append(true).create(true).open(file_name)?),
+            ErrDirection::Stderr(io::stderr()),
+        ),
         (Some("2>"), Some(file_name)) => (
             OutputDirection::Stdout(io::stdout()),
             ErrDirection::File(File::create(file_name)?),
