@@ -31,8 +31,10 @@ impl MyHelper {
                     (s, helper)
                 })
                 .collect();
-            while let Some((s, helper)) = v.pop() {
+            while let Some((mut s, helper)) = v.pop() {
                 if helper.0.is_empty() {
+                    s.pop();
+                    s.push(' ');
                     result.push(s);
                 } else {
                     v.extend(helper.0.iter().map(|(&c, helper)| {
