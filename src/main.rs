@@ -7,6 +7,13 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, exit};
 
+use rustyline::Editor;
+use rustyline::history::FileHistory;
+
+use crate::helper::MyHelper;
+
+mod helper;
+
 enum OutputDirection {
     File(File),
     Stdout(Stdout),
@@ -144,21 +151,24 @@ fn read_user_input(buffer: &str) -> Vec<String> {
         }
     }
 
+    if !arg_buffer.is_empty() {
+        result.push(arg_buffer);
+    }
+
     result
 }
 
 fn main_loop(
-    buffer: &mut String,
+    rl: &mut Editor<MyHelper, FileHistory>,
     path_variable: &[DirEntry],
     builtins: &HashSet<&str>,
 ) -> Result<(), io::Error> {
-    buffer.clear();
-    print!("$ ");
-    io::stdout().flush().unwrap();
+    let readline = match rl.readline("$ ") {
+        Ok(x) => x,
+        Err(err) => panic!("{err:?}"),
+    };
 
-    let _ = io::stdin().read_line(buffer);
-
-    let mut user_inputs = read_user_input(buffer);
+    let mut user_inputs = read_user_input(&readline);
     let possible_file_name = user_inputs.pop();
     let possible_redirect_operator = user_inputs.pop();
 
@@ -264,9 +274,7 @@ fn main_loop(
     }
 }
 
-fn main() {
-    let mut buffer = String::new();
-
+fn main() -> rustyline::Result<()> {
     let path_variable: Vec<DirEntry> = var("PATH")
         .map(|paths| {
             split_paths(&paths)
@@ -278,7 +286,10 @@ fn main() {
 
     let builtins = HashSet::from(["exit", "echo", "type", "pwd", "cd"]);
 
+    let mut editor: Editor<MyHelper, _> = Editor::new()?;
+    editor.set_helper(Some(MyHelper::from(builtins.iter().cloned())));
+
     loop {
-        let _ = main_loop(&mut buffer, &path_variable, &builtins);
+        let _ = main_loop(&mut editor, &path_variable, &builtins);
     }
 }
