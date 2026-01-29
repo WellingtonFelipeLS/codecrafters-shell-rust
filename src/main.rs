@@ -56,9 +56,8 @@ impl Write for ErrDirection {
     }
 }
 
-fn is_executable_with_name(dir_entry: &DirEntry, name: &str) -> bool {
-    if dir_entry.file_name() == name
-        && let Ok(metadata) = dir_entry.metadata()
+fn is_executable(dir_entry: &DirEntry) -> bool {
+    if let Ok(metadata) = dir_entry.metadata()
         && metadata.permissions().mode() & 0o001 == 1
     {
         true
@@ -159,11 +158,11 @@ fn read_user_input(buffer: &str) -> Vec<String> {
 }
 
 fn main_loop(
-    rl: &mut Editor<MyHelper, FileHistory>,
-    path_variable: &[DirEntry],
+    editor: &mut Editor<MyHelper, FileHistory>,
     builtins: &HashSet<&str>,
+    executable_paths: &[&DirEntry],
 ) -> Result<(), io::Error> {
-    let readline = match rl.readline("$ ") {
+    let readline = match editor.readline("$ ") {
         Ok(x) => x,
         Err(err) => panic!("{err:?}"),
     };
@@ -215,9 +214,9 @@ fn main_loop(
             if let Some(command) = user_inputs.get(1) {
                 if builtins.contains(command.as_str()) {
                     writeln!(output_direction, "{command} is a shell builtin")
-                } else if let Some(dir_entry) = path_variable
+                } else if let Some(dir_entry) = executable_paths
                     .iter()
-                    .find(|dir_entry| is_executable_with_name(dir_entry, command))
+                    .find(|dir_entry| dir_entry.file_name() == command.as_str())
                     && let Some(path) = dir_entry.path().to_str()
                 {
                     writeln!(output_direction, "{} is {}", command, path)
@@ -286,10 +285,25 @@ fn main() -> rustyline::Result<()> {
 
     let builtins = HashSet::from(["exit", "echo", "type", "pwd", "cd"]);
 
+    let executable_paths = path_variable
+        .iter()
+        .filter(|x| is_executable(x))
+        .collect::<Vec<_>>();
+
+    let executable_names = executable_paths
+        .iter()
+        .filter_map(|x| x.file_name().into_string().ok())
+        .collect::<Vec<_>>();
+
     let mut editor: Editor<MyHelper, _> = Editor::new()?;
-    editor.set_helper(Some(MyHelper::from(builtins.iter().cloned())));
+    editor.set_helper(Some(MyHelper::from(
+        builtins
+            .iter()
+            .cloned()
+            .chain(executable_names.iter().map(String::as_str)),
+    )));
 
     loop {
-        let _ = main_loop(&mut editor, &path_variable, &builtins);
+        let _ = main_loop(&mut editor, &builtins, &executable_paths);
     }
 }
