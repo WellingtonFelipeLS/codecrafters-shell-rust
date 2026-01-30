@@ -1,18 +1,20 @@
 use std::collections::HashSet;
-use std::env::{set_current_dir, split_paths, var};
-use std::ffi::OsStr;
 use std::fs::{DirEntry, File};
 use std::io::{self, Stderr, Stdout, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, exit};
+use std::{
+    env::{set_current_dir, split_paths, var},
+    ffi::OsStr,
+};
 
-use rustyline::Editor;
 use rustyline::history::FileHistory;
-
-use crate::helper::MyHelper;
+use rustyline::{CompletionType, Config, Editor};
 
 mod helper;
+
+use crate::helper::MyHelper;
 
 enum OutputDirection {
     File(File),
@@ -295,7 +297,11 @@ fn main() -> rustyline::Result<()> {
         .filter_map(|x| x.file_name().into_string().ok())
         .collect::<Vec<_>>();
 
-    let mut editor: Editor<MyHelper, _> = Editor::new()?;
+    let config = Config::builder()
+        .completion_type(CompletionType::List)
+        .build();
+
+    let mut editor: Editor<MyHelper, _> = Editor::with_config(config)?;
     editor.set_helper(Some(MyHelper::from(
         builtins
             .iter()
