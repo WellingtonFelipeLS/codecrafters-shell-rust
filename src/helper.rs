@@ -34,7 +34,6 @@ impl MyHelper {
             while let Some((mut s, helper)) = v.pop() {
                 if helper.0.is_empty() {
                     s.pop();
-                    s.push(' ');
                     result.push(s);
                 } else {
                     v.extend(helper.0.iter().map(|(&c, helper)| {
