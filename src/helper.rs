@@ -76,15 +76,22 @@ impl Completer for MyHelper {
         _pos: usize,
         _ctx: &rustyline::Context<'_>,
     ) -> rustyline::Result<(usize, Vec<Self::Candidate>)> {
-        Ok((0, self.starts_with(line)))
+        let mut candidates = self.starts_with(line);
+
+        if candidates.len() == 1
+            && let Some(x) = candidates.get_mut(0)
+        {
+            x.push(' ')
+        }
+
+        Ok((0, candidates))
     }
 }
 
 impl Hinter for MyHelper {
     type Hint = &'static str;
 
-    fn hint(&self, line: &str, pos: usize, ctx: &rustyline::Context<'_>) -> Option<Self::Hint> {
-        let _ = (line, pos, ctx);
+    fn hint(&self, _line: &str, _pos: usize, _ctx: &rustyline::Context<'_>) -> Option<Self::Hint> {
         None
     }
 }
