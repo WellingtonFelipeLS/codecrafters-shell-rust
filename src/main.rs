@@ -9,6 +9,7 @@ use std::{
     ffi::OsStr,
 };
 
+use rustyline::config::BellStyle;
 use rustyline::history::FileHistory;
 use rustyline::{CompletionType, Config, Editor};
 
@@ -299,6 +300,7 @@ fn main() -> rustyline::Result<()> {
 
     let config = Config::builder()
         .completion_type(CompletionType::List)
+        .bell_style(BellStyle::Audible)
         .build();
 
     let mut editor: Editor<MyHelper, _> = Editor::with_config(config)?;

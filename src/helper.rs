@@ -46,6 +46,8 @@ impl MyHelper {
             }
         }
 
+        result.sort_unstable();
+
         result
     }
 }
