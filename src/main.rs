@@ -1,9 +1,9 @@
 use std::collections::HashSet;
 use std::fs::{DirEntry, File};
-use std::io::{self, Stderr, Stdout, Write};
+use std::io::{self, PipeReader, Read, Stderr, Stdout, Write, pipe};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, exit};
+use std::process::{Command, Stdio, exit};
 use std::{
     env::{set_current_dir, split_paths, var},
     ffi::OsStr,
@@ -160,21 +160,13 @@ fn read_user_input(buffer: &str) -> Vec<String> {
     result
 }
 
-fn main_loop(
-    editor: &mut Editor<MyHelper, FileHistory>,
-    builtins: &HashSet<&str>,
-    executable_paths: &[&DirEntry],
-) -> Result<(), io::Error> {
-    let readline = match editor.readline("$ ") {
-        Ok(x) => x,
-        Err(err) => panic!("{err:?}"),
-    };
-
-    let mut user_inputs = read_user_input(&readline);
+fn verify_out_and_err_direction(
+    user_inputs: &mut Vec<String>,
+) -> io::Result<(OutputDirection, ErrDirection)> {
     let possible_file_name = user_inputs.pop();
     let possible_redirect_operator = user_inputs.pop();
 
-    let (mut output_direction, mut err_direction) = match (
+    let result = match (
         possible_redirect_operator.as_deref(),
         possible_file_name.as_ref(),
     ) {
@@ -209,6 +201,18 @@ fn main_loop(
             )
         }
     };
+
+    Ok(result)
+}
+
+fn call_command_with_args(
+    user_inputs: &mut Vec<String>,
+    builtins: &HashSet<&str>,
+    executable_paths: &[&DirEntry],
+    ping_reader: PipeReader,
+    piped_data: &mut String,
+) -> Result<(), io::Error> {
+    let (mut output_direction, mut err_direction) = verify_out_and_err_direction(user_inputs)?;
 
     match user_inputs.first().map(String::as_str) {
         Some("exit") => exit(0),
@@ -258,22 +262,79 @@ fn main_loop(
             }
         }
         Some(command) => {
-            match Command::new(command)
+            let (mut pong_reader, pong_writer) = pipe()?;
+            let mut child_command = Command::new(command);
+
+            child_command
                 .args(user_inputs.iter().skip(1).map(OsStr::new))
-                .output()
-            {
-                Ok(out) => {
-                    write!(output_direction, "{}", String::from_utf8_lossy(&out.stdout))?;
-                    write!(err_direction, "{}", String::from_utf8_lossy(&out.stderr))
-                }
-                Err(_) => {
-                    println!("{command}: not found");
-                    Ok(())
-                }
-            }
+                .stdin(ping_reader)
+                .stdout(pong_writer);
+
+            let child = child_command
+                .spawn()
+                .unwrap_or_else(|_| panic!("{command}: not found"));
+
+            drop(child_command);
+
+            pong_reader.read_to_string(piped_data).unwrap();
+            let out = child.wait_with_output()?;
+
+            write!(output_direction, "{}", String::from_utf8_lossy(&out.stdout))?;
+            write!(err_direction, "{}", String::from_utf8_lossy(&out.stderr))
         }
         _ => Ok(()),
     }
+}
+
+fn main_loop(
+    editor: &mut Editor<MyHelper, FileHistory>,
+    builtins: &HashSet<&str>,
+    executable_paths: &[&DirEntry],
+) -> Result<(), io::Error> {
+    let readline = match editor.readline("$ ") {
+        Ok(x) => x,
+        Err(err) => panic!("{err:?}"),
+    };
+
+    let mut processed_user_inputs = Vec::new();
+
+    let last_input = read_user_input(&readline)
+        .into_iter()
+        .fold(Vec::new(), |mut acc, x| {
+            if x.as_str() == "|" {
+                processed_user_inputs.push(acc);
+                Vec::new()
+            } else {
+                acc.push(x);
+                acc
+            }
+        });
+
+    processed_user_inputs.push(last_input);
+
+    let mut piped_data = String::new();
+
+    processed_user_inputs
+        .into_iter()
+        .try_for_each(|mut user_inputs| {
+            let (ping_reader, mut ping_writer) = pipe()?;
+            ping_writer.write_all(piped_data.as_bytes())?;
+            piped_data.clear();
+            drop(ping_writer);
+            call_command_with_args(
+                &mut user_inputs,
+                builtins,
+                executable_paths,
+                ping_reader,
+                &mut piped_data,
+            )
+        })?;
+
+    if !piped_data.is_empty() {
+        print!("{piped_data}");
+    }
+
+    Ok(())
 }
 
 fn main() -> rustyline::Result<()> {
