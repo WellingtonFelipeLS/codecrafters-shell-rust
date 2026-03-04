@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use std::fs::{DirEntry, File};
-use std::io::{self, PipeReader, Read, Stderr, Stdout, Write, pipe};
+use std::io::{self, PipeReader, PipeWriter, Read, Stderr, Write, pipe};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio, exit};
@@ -19,7 +19,7 @@ use crate::helper::MyHelper;
 
 enum OutputDirection {
     File(File),
-    Stdout(Stdout),
+    PipeWriter(PipeWriter),
 }
 
 enum ErrDirection {
@@ -31,14 +31,14 @@ impl Write for OutputDirection {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         match self {
             OutputDirection::File(file) => file.write(buf),
-            OutputDirection::Stdout(stdout) => stdout.write(buf),
+            OutputDirection::PipeWriter(pipe_writer) => pipe_writer.write(buf),
         }
     }
 
     fn flush(&mut self) -> io::Result<()> {
         match self {
             OutputDirection::File(file) => file.flush(),
-            OutputDirection::Stdout(stdout) => stdout.flush(),
+            OutputDirection::PipeWriter(pipe_writer) => pipe_writer.flush(),
         }
     }
 }
@@ -162,6 +162,7 @@ fn read_user_input(buffer: &str) -> Vec<String> {
 
 fn verify_out_and_err_direction(
     user_inputs: &mut Vec<String>,
+    pipe_writer: PipeWriter,
 ) -> io::Result<(OutputDirection, ErrDirection)> {
     let possible_file_name = user_inputs.pop();
     let possible_redirect_operator = user_inputs.pop();
@@ -179,11 +180,11 @@ fn verify_out_and_err_direction(
             ErrDirection::Stderr(io::stderr()),
         ),
         (Some("2>"), Some(file_name)) => (
-            OutputDirection::Stdout(io::stdout()),
+            OutputDirection::PipeWriter(pipe_writer),
             ErrDirection::File(File::create(file_name)?),
         ),
         (Some("2>>"), Some(file_name)) => (
-            OutputDirection::Stdout(io::stdout()),
+            OutputDirection::PipeWriter(pipe_writer),
             ErrDirection::File(File::options().append(true).create(true).open(file_name)?),
         ),
         _ => {
@@ -196,7 +197,7 @@ fn verify_out_and_err_direction(
             }
 
             (
-                OutputDirection::Stdout(io::stdout()),
+                OutputDirection::PipeWriter(pipe_writer),
                 ErrDirection::Stderr(io::stderr()),
             )
         }
@@ -205,43 +206,50 @@ fn verify_out_and_err_direction(
     Ok(result)
 }
 
-fn call_command_with_args(
+fn call_command_with_args<I>(
     user_inputs: &mut Vec<String>,
     builtins: &HashSet<&str>,
     executable_paths: &[&DirEntry],
-    ping_reader: PipeReader,
-    piped_data: &mut String,
-) -> Result<(), io::Error> {
-    let (mut output_direction, mut err_direction) = verify_out_and_err_direction(user_inputs)?;
+    input_reader: I,
+) -> Result<PipeReader, io::Error>
+where
+    I: Into<Stdio>,
+{
+    let (pong_reader, pong_writer) = pipe()?;
+
+    let (mut output_direction, mut err_direction) =
+        verify_out_and_err_direction(user_inputs, pong_writer)?;
 
     match user_inputs.first().map(String::as_str) {
         Some("exit") => exit(0),
-        Some("echo") => writeln!(output_direction, "{}", user_inputs[1..].join(" ")),
+        Some("echo") => {
+            writeln!(output_direction, "{}", user_inputs[1..].join(" "))?;
+        }
         Some("type") => {
             if let Some(command) = user_inputs.get(1) {
                 if builtins.contains(command.as_str()) {
-                    writeln!(output_direction, "{command} is a shell builtin")
+                    writeln!(output_direction, "{command} is a shell builtin")?;
                 } else if let Some(dir_entry) = executable_paths
                     .iter()
                     .find(|dir_entry| dir_entry.file_name() == command.as_str())
                     && let Some(path) = dir_entry.path().to_str()
                 {
-                    writeln!(output_direction, "{} is {}", command, path)
+                    writeln!(output_direction, "{} is {}", command, path)?;
                 } else {
-                    writeln!(err_direction, "{}: not found", command)
+                    writeln!(err_direction, "{}: not found", command)?;
                 }
-            } else {
-                Ok(())
             }
         }
-        Some("pwd") => writeln!(
-            output_direction,
-            "{}",
-            std::env::current_dir()
-                .expect("Should be a valid working directory")
-                .to_str()
-                .expect("Should be valid UTF-8")
-        ),
+        Some("pwd") => {
+            writeln!(
+                output_direction,
+                "{}",
+                std::env::current_dir()
+                    .expect("Should be a valid working directory")
+                    .to_str()
+                    .expect("Should be valid UTF-8")
+            )?;
+        }
         Some("cd") => {
             let path = if let Some(path) = user_inputs.get(1)
                 && *path != "~"
@@ -256,34 +264,29 @@ fn call_command_with_args(
                     err_direction,
                     "cd: {}: No such file or directory",
                     path.to_str().expect("Should be valid UTF-8")
-                )
-            } else {
-                Ok(())
+                )?;
             }
         }
         Some(command) => {
-            let (mut pong_reader, pong_writer) = pipe()?;
             let mut child_command = Command::new(command);
 
             child_command
                 .args(user_inputs.iter().skip(1).map(OsStr::new))
-                .stdin(ping_reader)
-                .stdout(pong_writer);
+                .stdin(input_reader);
 
-            let child = child_command
-                .spawn()
-                .unwrap_or_else(|_| panic!("{command}: not found"));
+            match output_direction {
+                OutputDirection::File(file) => child_command.stdout(file),
+                OutputDirection::PipeWriter(pipe_writer) => child_command.stdout(pipe_writer),
+            };
 
-            drop(child_command);
-
-            pong_reader.read_to_string(piped_data).unwrap();
-            let out = child.wait_with_output()?;
-
-            write!(output_direction, "{}", String::from_utf8_lossy(&out.stdout))?;
-            write!(err_direction, "{}", String::from_utf8_lossy(&out.stderr))
+            if child_command.spawn().is_err() {
+                println!("{command}: not found");
+            }
         }
-        _ => Ok(()),
-    }
+        _ => (),
+    };
+
+    Ok(pong_reader)
 }
 
 fn main_loop(
@@ -312,27 +315,20 @@ fn main_loop(
 
     processed_user_inputs.push(last_input);
 
-    let mut piped_data = String::new();
+    let (ping_reader, _) = pipe()?;
 
-    processed_user_inputs
-        .into_iter()
-        .try_for_each(|mut user_inputs| {
-            let (ping_reader, mut ping_writer) = pipe()?;
-            ping_writer.write_all(piped_data.as_bytes())?;
-            piped_data.clear();
-            drop(ping_writer);
-            call_command_with_args(
-                &mut user_inputs,
-                builtins,
-                executable_paths,
-                ping_reader,
-                &mut piped_data,
-            )
-        })?;
+    let mut final_reader = processed_user_inputs.into_iter().try_fold(
+        ping_reader,
+        |input_reader, mut user_inputs| {
+            call_command_with_args(&mut user_inputs, builtins, executable_paths, input_reader)
+        },
+    )?;
 
-    if !piped_data.is_empty() {
-        print!("{piped_data}");
-    }
+    let mut buffer = String::new();
+
+    final_reader.read_to_string(&mut buffer)?;
+
+    print!("{buffer}");
 
     Ok(())
 }
