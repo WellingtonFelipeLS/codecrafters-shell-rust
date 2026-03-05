@@ -64,6 +64,25 @@ impl Write for ErrDirection {
     }
 }
 
+impl From<OutputDirection> for Stdio {
+    fn from(value: OutputDirection) -> Self {
+        match value {
+            OutputDirection::File(file) => file.into(),
+            OutputDirection::PipeWriter(pipe_writer) => pipe_writer.into(),
+            OutputDirection::Stdout(stdout) => stdout.into(),
+        }
+    }
+}
+
+impl From<ErrDirection> for Stdio {
+    fn from(value: ErrDirection) -> Self {
+        match value {
+            ErrDirection::File(file) => file.into(),
+            ErrDirection::Stderr(stderr) => stderr.into(),
+        }
+    }
+}
+
 fn is_executable(dir_entry: &DirEntry) -> bool {
     if let Ok(metadata) = dir_entry.metadata()
         && metadata.permissions().mode() & 0o001 == 1
@@ -291,11 +310,7 @@ where
                 child_command.stdin(input_reader.unwrap());
             }
 
-            match output_direction {
-                OutputDirection::File(file) => child_command.stdout(file),
-                OutputDirection::PipeWriter(pipe_writer) => child_command.stdout(pipe_writer),
-                OutputDirection::Stdout(stdout) => child_command.stdout(stdout),
-            };
+            child_command.stdout(output_direction).stderr(err_direction);
 
             match child_command.spawn() {
                 Ok(child) => {
