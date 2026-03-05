@@ -1,9 +1,11 @@
-use std::collections::HashSet;
-use std::fs::{DirEntry, File};
-use std::io::{self, PipeReader, PipeWriter, Read, Stderr, Write, pipe};
+use std::io::{self, PipeReader, PipeWriter, Read, Stderr, Stdout, Write, pipe, stdout};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio, exit};
+use std::process::{Child, Command, Stdio, exit};
+use std::{
+    collections::HashSet,
+    fs::{DirEntry, File},
+};
 use std::{
     env::{set_current_dir, split_paths, var},
     ffi::OsStr,
@@ -20,6 +22,7 @@ use crate::helper::MyHelper;
 enum OutputDirection {
     File(File),
     PipeWriter(PipeWriter),
+    Stdout(Stdout),
 }
 
 enum ErrDirection {
@@ -32,6 +35,7 @@ impl Write for OutputDirection {
         match self {
             OutputDirection::File(file) => file.write(buf),
             OutputDirection::PipeWriter(pipe_writer) => pipe_writer.write(buf),
+            OutputDirection::Stdout(stdout) => stdout.write(buf),
         }
     }
 
@@ -39,6 +43,7 @@ impl Write for OutputDirection {
         match self {
             OutputDirection::File(file) => file.flush(),
             OutputDirection::PipeWriter(pipe_writer) => pipe_writer.flush(),
+            OutputDirection::Stdout(stdout) => stdout.flush(),
         }
     }
 }
@@ -162,10 +167,15 @@ fn read_user_input(buffer: &str) -> Vec<String> {
 
 fn verify_out_and_err_direction(
     user_inputs: &mut Vec<String>,
-    pipe_writer: PipeWriter,
+    pipe_writer: Option<PipeWriter>,
 ) -> io::Result<(OutputDirection, ErrDirection)> {
     let possible_file_name = user_inputs.pop();
     let possible_redirect_operator = user_inputs.pop();
+
+    let output_direction = match pipe_writer {
+        Some(pipe_writer) => OutputDirection::PipeWriter(pipe_writer),
+        None => OutputDirection::Stdout(stdout()),
+    };
 
     let result = match (
         possible_redirect_operator.as_deref(),
@@ -180,11 +190,11 @@ fn verify_out_and_err_direction(
             ErrDirection::Stderr(io::stderr()),
         ),
         (Some("2>"), Some(file_name)) => (
-            OutputDirection::PipeWriter(pipe_writer),
+            output_direction,
             ErrDirection::File(File::create(file_name)?),
         ),
         (Some("2>>"), Some(file_name)) => (
-            OutputDirection::PipeWriter(pipe_writer),
+            output_direction,
             ErrDirection::File(File::options().append(true).create(true).open(file_name)?),
         ),
         _ => {
@@ -196,10 +206,7 @@ fn verify_out_and_err_direction(
                 user_inputs.push(x);
             }
 
-            (
-                OutputDirection::PipeWriter(pipe_writer),
-                ErrDirection::Stderr(io::stderr()),
-            )
+            (output_direction, ErrDirection::Stderr(io::stderr()))
         }
     };
 
@@ -207,18 +214,26 @@ fn verify_out_and_err_direction(
 }
 
 fn call_command_with_args<I>(
-    user_inputs: &mut Vec<String>,
+    mut user_inputs: Vec<String>,
     builtins: &HashSet<&str>,
     executable_paths: &[&DirEntry],
-    input_reader: I,
-) -> Result<PipeReader, io::Error>
+    input_reader: Option<I>,
+    children: &mut Vec<Child>,
+    idx: usize,
+    len: usize,
+) -> Result<Option<PipeReader>, io::Error>
 where
-    I: Into<Stdio>,
+    I: Into<Stdio> + Read,
 {
-    let (pong_reader, pong_writer) = pipe()?;
+    let (pipe_reader, pipe_writer) = if idx == len - 1 {
+        (None, None)
+    } else {
+        let (a, b) = pipe()?;
+        (Some(a), Some(b))
+    };
 
     let (mut output_direction, mut err_direction) =
-        verify_out_and_err_direction(user_inputs, pong_writer)?;
+        verify_out_and_err_direction(&mut user_inputs, pipe_writer)?;
 
     match user_inputs.first().map(String::as_str) {
         Some("exit") => exit(0),
@@ -270,23 +285,31 @@ where
         Some(command) => {
             let mut child_command = Command::new(command);
 
-            child_command
-                .args(user_inputs.iter().skip(1).map(OsStr::new))
-                .stdin(input_reader);
+            child_command.args(user_inputs.iter().skip(1).map(OsStr::new));
+
+            if idx != 0 {
+                child_command.stdin(input_reader.unwrap());
+            }
 
             match output_direction {
                 OutputDirection::File(file) => child_command.stdout(file),
                 OutputDirection::PipeWriter(pipe_writer) => child_command.stdout(pipe_writer),
+                OutputDirection::Stdout(stdout) => child_command.stdout(stdout),
             };
 
-            if child_command.spawn().is_err() {
-                println!("{command}: not found");
+            match child_command.spawn() {
+                Ok(child) => {
+                    children.push(child);
+                }
+                Err(_) => {
+                    println!("{command}: not found");
+                }
             }
         }
         _ => (),
     };
 
-    Ok(pong_reader)
+    Ok(pipe_reader)
 }
 
 fn main_loop(
@@ -315,20 +338,29 @@ fn main_loop(
 
     processed_user_inputs.push(last_input);
 
-    let (ping_reader, _) = pipe()?;
+    let len = processed_user_inputs.len();
 
-    let mut final_reader = processed_user_inputs.into_iter().try_fold(
-        ping_reader,
-        |input_reader, mut user_inputs| {
-            call_command_with_args(&mut user_inputs, builtins, executable_paths, input_reader)
+    let mut children = Vec::new();
+
+    processed_user_inputs.into_iter().enumerate().try_fold(
+        None,
+        |input_reader, (idx, user_inputs)| {
+            call_command_with_args(
+                user_inputs,
+                builtins,
+                executable_paths,
+                input_reader,
+                &mut children,
+                idx,
+                len,
+            )
         },
     )?;
 
-    let mut buffer = String::new();
-
-    final_reader.read_to_string(&mut buffer)?;
-
-    print!("{buffer}");
+    children
+        .into_iter()
+        .rev()
+        .try_for_each(|mut child| child.wait().map(|_| ()))?;
 
     Ok(())
 }
