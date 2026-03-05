@@ -390,7 +390,7 @@ fn main() -> rustyline::Result<()> {
         })
         .unwrap_or_default();
 
-    let builtins = HashSet::from(["exit", "echo", "type", "pwd", "cd"]);
+    let builtins = HashSet::from(["exit", "echo", "type", "pwd", "cd", "history"]);
 
     let executable_paths = path_variable
         .iter()
