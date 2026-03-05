@@ -345,17 +345,14 @@ where
             }
             Some("-w") => {
                 if let Some(path) = user_inputs.get(2).map(Path::new) {
-                    if history.save(path).is_err() {
-                        writeln!(err_direction, "history: invalid file path")
-                    } else {
-                        File::options()
-                            .append(true)
-                            .create(true)
-                            .open(path)?
-                            .write_all(b"\n")?;
+                    let mut file = File::options().append(true).create(true).open(path)?;
 
-                        Ok(())
-                    }
+                    history.iter().try_for_each(|line| {
+                        file.write_all(line.as_bytes())?;
+                        file.write_all(b"\n")
+                    })?;
+
+                    file.write_all(b"\n")
                 } else {
                     writeln!(err_direction, "history: invalid file path")
                 }
