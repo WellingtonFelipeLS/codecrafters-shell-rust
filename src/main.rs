@@ -12,8 +12,8 @@ use std::{
 };
 
 use rustyline::config::BellStyle;
-use rustyline::history::FileHistory;
-use rustyline::{CompletionType, Config, Editor};
+use rustyline::history::{FileHistory, History};
+use rustyline::{Cmd, CompletionType, Config, Editor, KeyCode, KeyEvent, Modifiers};
 
 mod helper;
 
@@ -262,7 +262,7 @@ fn call_command_with_args<I>(
     mut user_inputs: Vec<String>,
     builtins: &HashSet<&str>,
     executable_paths: &[&DirEntry],
-    history: &mut [String],
+    history: &mut FileHistory,
     input_reader: Option<I>,
     children: &mut Vec<Child>,
     process_position: ProcessPosition,
@@ -371,7 +371,6 @@ fn main_loop(
     editor: &mut Editor<MyHelper, FileHistory>,
     builtins: &HashSet<&str>,
     executable_paths: &[&DirEntry],
-    history: &mut Vec<String>,
 ) -> Result<(), io::Error> {
     let readline = match editor.readline("$ ") {
         Ok(x) => x,
@@ -395,7 +394,7 @@ fn main_loop(
     processed_user_inputs.push(last_input);
 
     if !readline.is_empty() {
-        history.push(readline);
+        let _ = editor.add_history_entry(readline);
     }
 
     let len = processed_user_inputs.len();
@@ -409,7 +408,7 @@ fn main_loop(
                 user_inputs,
                 builtins,
                 executable_paths,
-                history,
+                editor.history_mut(),
                 input_reader,
                 &mut children,
                 ProcessPosition::new(idx, len),
@@ -437,8 +436,6 @@ fn main() -> rustyline::Result<()> {
 
     let builtins = HashSet::from(["exit", "echo", "type", "pwd", "cd", "history"]);
 
-    let mut history = Vec::new();
-
     let executable_paths = path_variable
         .iter()
         .filter(|x| is_executable(x))
@@ -462,7 +459,9 @@ fn main() -> rustyline::Result<()> {
             .chain(executable_names.iter().map(String::as_str)),
     )));
 
+    editor.bind_sequence(KeyEvent(KeyCode::Up, Modifiers::NONE), Cmd::PreviousHistory);
+
     loop {
-        let _ = main_loop(&mut editor, &builtins, &executable_paths, &mut history);
+        let _ = main_loop(&mut editor, &builtins, &executable_paths);
     }
 }
