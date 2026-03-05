@@ -350,9 +350,7 @@ where
                     history.iter().try_for_each(|line| {
                         file.write_all(line.as_bytes())?;
                         file.write_all(b"\n")
-                    })?;
-
-                    file.write_all(b"\n")
+                    })
                 } else {
                     writeln!(err_direction, "history: invalid file path")
                 }
