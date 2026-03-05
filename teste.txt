@@ -1,0 +1,6 @@
+#V2
+echo teste1
+echo teste2
+history
+history -w teste.txt
+

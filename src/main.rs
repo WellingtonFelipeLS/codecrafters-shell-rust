@@ -343,6 +343,23 @@ where
                     writeln!(err_direction, "history: invalid file path")
                 }
             }
+            Some("-w") => {
+                if let Some(path) = user_inputs.get(2).map(Path::new) {
+                    if history.save(path).is_err() {
+                        writeln!(err_direction, "history: invalid file path")
+                    } else {
+                        File::options()
+                            .append(true)
+                            .create(true)
+                            .open(path)?
+                            .write_all(b"\n")?;
+
+                        Ok(())
+                    }
+                } else {
+                    writeln!(err_direction, "history: invalid file path")
+                }
+            }
             Some(x) => {
                 if let Ok(number) = x.parse::<usize>() {
                     history
