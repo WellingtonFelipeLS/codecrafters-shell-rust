@@ -327,18 +327,32 @@ where
                 )?;
             }
         }
-        Some("history") => match user_inputs.get(1).map(|x| x.parse::<usize>()) {
+        Some("history") => match user_inputs.get(1).map(String::as_str) {
             None => history
                 .iter()
                 .zip(1..)
                 .try_for_each(|(line, idx)| writeln!(output_direction, "{idx} {line}")),
-            Some(Ok(number)) => history
-                .iter()
-                .zip(1..)
-                .skip(history.len().saturating_sub(number))
-                .try_for_each(|(line, idx)| writeln!(output_direction, "{idx} {line}")),
-            _ => {
-                writeln! {err_direction, "history: erro"}
+            Some("-r") => {
+                if let Some(path) = user_inputs.get(2).map(Path::new) {
+                    if history.load(path).is_err() {
+                        writeln!(err_direction, "history: invalid file path")
+                    } else {
+                        Ok(())
+                    }
+                } else {
+                    writeln!(err_direction, "history: invalid file path")
+                }
+            }
+            Some(x) => {
+                if let Ok(number) = x.parse::<usize>() {
+                    history
+                        .iter()
+                        .zip(1..)
+                        .skip(history.len().saturating_sub(number))
+                        .try_for_each(|(line, idx)| writeln!(output_direction, "{idx} {line}"))
+                } else {
+                    writeln!(err_direction, "history: invalid number")
+                }
             }
         }?,
         Some(command) => {
