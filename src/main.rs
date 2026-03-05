@@ -30,6 +30,13 @@ enum ErrDirection {
     Stderr(Stderr),
 }
 
+enum ProcessPosition {
+    First,
+    Middle,
+    Last,
+    FirstAndLast,
+}
+
 impl Write for OutputDirection {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         match self {
@@ -80,6 +87,25 @@ impl From<ErrDirection> for Stdio {
             ErrDirection::File(file) => file.into(),
             ErrDirection::Stderr(stderr) => stderr.into(),
         }
+    }
+}
+
+impl ProcessPosition {
+    fn new(idx: usize, len: usize) -> Self {
+        match idx {
+            0 if idx == len - 1 => Self::FirstAndLast,
+            0 => Self::First,
+            _ if idx == len - 1 => Self::Last,
+            _ => Self::Middle,
+        }
+    }
+
+    fn is_first(&self) -> bool {
+        matches!(self, Self::FirstAndLast | Self::First)
+    }
+
+    fn is_last(&self) -> bool {
+        matches!(self, Self::FirstAndLast | Self::Last)
     }
 }
 
@@ -236,15 +262,15 @@ fn call_command_with_args<I>(
     mut user_inputs: Vec<String>,
     builtins: &HashSet<&str>,
     executable_paths: &[&DirEntry],
+    history: &mut [String],
     input_reader: Option<I>,
     children: &mut Vec<Child>,
-    idx: usize,
-    len: usize,
+    process_position: ProcessPosition,
 ) -> Result<Option<PipeReader>, io::Error>
 where
     I: Into<Stdio> + Read,
 {
-    let (pipe_reader, pipe_writer) = if idx == len - 1 {
+    let (pipe_reader, pipe_writer) = if process_position.is_last() {
         (None, None)
     } else {
         let (a, b) = pipe()?;
@@ -301,12 +327,16 @@ where
                 )?;
             }
         }
+        Some("history") => history
+            .iter()
+            .zip(1..)
+            .for_each(|(line, idx)| println!("{idx} {line}")),
         Some(command) => {
             let mut child_command = Command::new(command);
 
             child_command.args(user_inputs.iter().skip(1).map(OsStr::new));
 
-            if idx != 0 {
+            if !process_position.is_first() {
                 child_command.stdin(input_reader.unwrap());
             }
 
@@ -331,6 +361,7 @@ fn main_loop(
     editor: &mut Editor<MyHelper, FileHistory>,
     builtins: &HashSet<&str>,
     executable_paths: &[&DirEntry],
+    history: &mut Vec<String>,
 ) -> Result<(), io::Error> {
     let readline = match editor.readline("$ ") {
         Ok(x) => x,
@@ -353,6 +384,10 @@ fn main_loop(
 
     processed_user_inputs.push(last_input);
 
+    if !readline.is_empty() {
+        history.push(readline);
+    }
+
     let len = processed_user_inputs.len();
 
     let mut children = Vec::new();
@@ -364,10 +399,10 @@ fn main_loop(
                 user_inputs,
                 builtins,
                 executable_paths,
+                history,
                 input_reader,
                 &mut children,
-                idx,
-                len,
+                ProcessPosition::new(idx, len),
             )
         },
     )?;
@@ -391,6 +426,8 @@ fn main() -> rustyline::Result<()> {
         .unwrap_or_default();
 
     let builtins = HashSet::from(["exit", "echo", "type", "pwd", "cd", "history"]);
+
+    let mut history = Vec::new();
 
     let executable_paths = path_variable
         .iter()
@@ -416,6 +453,6 @@ fn main() -> rustyline::Result<()> {
     )));
 
     loop {
-        let _ = main_loop(&mut editor, &builtins, &executable_paths);
+        let _ = main_loop(&mut editor, &builtins, &executable_paths, &mut history);
     }
 }
