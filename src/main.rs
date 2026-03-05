@@ -11,7 +11,7 @@ use std::{
     ffi::OsStr,
 };
 
-use rustyline::config::BellStyle;
+use rustyline::config::{BellStyle, Configurer};
 use rustyline::history::{FileHistory, History};
 use rustyline::{Cmd, CompletionType, Config, Editor, KeyCode, KeyEvent, Modifiers};
 
@@ -460,6 +460,8 @@ fn main() -> rustyline::Result<()> {
     )));
 
     editor.bind_sequence(KeyEvent(KeyCode::Up, Modifiers::NONE), Cmd::PreviousHistory);
+
+    editor.set_history_ignore_dups(false)?;
 
     loop {
         let _ = main_loop(&mut editor, &builtins, &executable_paths);
