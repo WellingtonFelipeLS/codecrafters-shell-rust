@@ -327,10 +327,20 @@ where
                 )?;
             }
         }
-        Some("history") => history
-            .iter()
-            .zip(1..)
-            .for_each(|(line, idx)| println!("{idx} {line}")),
+        Some("history") => match user_inputs.get(1).map(|x| x.parse::<usize>()) {
+            None => history
+                .iter()
+                .zip(1..)
+                .try_for_each(|(line, idx)| writeln!(output_direction, "{idx} {line}")),
+            Some(Ok(number)) => history
+                .iter()
+                .zip(1..)
+                .skip(history.len().saturating_sub(number))
+                .try_for_each(|(line, idx)| writeln!(output_direction, "{idx} {line}")),
+            _ => {
+                writeln! {err_direction, "history: erro"}
+            }
+        }?,
         Some(command) => {
             let mut child_command = Command::new(command);
 
