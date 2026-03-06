@@ -1,3 +1,4 @@
+use std::fs;
 use std::io::{self, PipeReader, PipeWriter, Read, Stderr, Stdout, Write, pipe, stdout};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -345,12 +346,26 @@ where
             }
             Some("-w") => {
                 if let Some(path) = user_inputs.get(2).map(Path::new) {
-                    let mut file = File::options().append(true).create(true).open(path)?;
+                    let _ = history.save(path);
 
-                    history.iter().try_for_each(|line| {
-                        file.write_all(line.as_bytes())?;
-                        file.write_all(b"\n")
-                    })
+                    let content = std::fs::read_to_string(path)?;
+
+                    let new_content: Vec<&str> = content.lines().skip(1).collect();
+
+                    fs::write(path, new_content.join("\n"))
+                } else {
+                    writeln!(err_direction, "history: invalid file path")
+                }
+            }
+            Some("-a") => {
+                if let Some(path) = user_inputs.get(2).map(Path::new) {
+                    let _ = history.append(path);
+
+                    let content = std::fs::read_to_string(path)?;
+
+                    let new_content: Vec<&str> = content.lines().skip(1).collect();
+
+                    fs::write(path, new_content.join("\n"))
                 } else {
                     writeln!(err_direction, "history: invalid file path")
                 }

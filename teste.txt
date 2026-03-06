@@ -1,5 +1,12 @@
-echo teste
-echo teste1
-history
+#V2
+cat teste.txt
+rm teste.txt
 history -w teste.txt
-
+cat teste.txt
+teste
+echo teste
+history
+history -a teste.txt
+cat teste.txt
+a
+history -a teste.txt
