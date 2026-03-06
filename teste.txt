@@ -1,7 +1,0 @@
-rm teste.txt
-history
-history -w teste.txt
-cat teste.txt
-echo teste
-history -a teste.txt
-
