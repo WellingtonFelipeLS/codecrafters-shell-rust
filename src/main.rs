@@ -350,9 +350,10 @@ where
 
                     let content = std::fs::read_to_string(path)?;
 
-                    let new_content: Vec<&str> = content.lines().skip(1).collect();
+                    let mut new_content: Vec<&str> = content.lines().skip(1).collect();
+                    new_content.push("\n");
 
-                    fs::write(path, new_content.join("\n") + "\n")
+                    fs::write(path, new_content.join("\n"))
                 } else {
                     writeln!(err_direction, "history: invalid file path")
                 }
@@ -363,9 +364,10 @@ where
 
                     let content = std::fs::read_to_string(path)?;
 
-                    let new_content: Vec<&str> = content.lines().skip(1).collect();
+                    let mut new_content: Vec<&str> = content.lines().skip(1).collect();
+                    new_content.push("\n");
 
-                    fs::write(path, new_content.join("\n") + "\n")
+                    fs::write(path, new_content.join("\n"))
                 } else {
                     writeln!(err_direction, "history: invalid file path")
                 }
