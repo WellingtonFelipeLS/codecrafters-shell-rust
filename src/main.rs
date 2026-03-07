@@ -282,7 +282,22 @@ where
         verify_out_and_err_direction(&mut user_inputs, pipe_writer)?;
 
     match user_inputs.first().map(String::as_str) {
-        Some("exit") => exit(0),
+        Some("exit") => {
+            if let Some(history_filepath) =
+                env::vars().find_map(|(k, v)| if k == "HISTFILE" { Some(v) } else { None })
+            {
+                let history_filepath = Path::new(&history_filepath);
+
+                let _ = history.save(history_filepath);
+
+                let content = std::fs::read_to_string(history_filepath)?;
+
+                let new_content: Vec<&str> = content.lines().skip(1).collect();
+
+                fs::write(history_filepath, new_content.join("\n") + "\n")?;
+            }
+            exit(0)
+        }
         Some("echo") => {
             writeln!(output_direction, "{}", user_inputs[1..].join(" "))?;
         }
