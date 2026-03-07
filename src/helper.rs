@@ -104,7 +104,7 @@ impl Completer for MyHelper {
                 x.replacement.push(' ');
             }
 
-            Ok((n, candidates))
+            Ok((n, Vec::new()))
         } else {
             let mut candidates = self.commands.starts_with(line);
 
