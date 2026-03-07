@@ -290,11 +290,12 @@ where
 
                 let _ = history.append(history_filepath);
 
-                let content = std::fs::read_to_string(history_filepath)?;
+                let new_content = std::fs::read_to_string(history_filepath)?
+                    .lines()
+                    .skip(1)
+                    .fold(String::new(), |acc, x| acc + x + "\n");
 
-                let new_content: Vec<&str> = content.lines().skip(1).collect();
-
-                fs::write(history_filepath, new_content.join("\n") + "\n")?;
+                fs::write(history_filepath, new_content)?;
             }
             exit(0)
         }
@@ -363,11 +364,12 @@ where
                 if let Some(path) = user_inputs.get(2).map(Path::new) {
                     let _ = history.save(path);
 
-                    let content = std::fs::read_to_string(path)?;
+                    let new_content = std::fs::read_to_string(path)?
+                        .lines()
+                        .skip(1)
+                        .fold(String::new(), |acc, x| acc + x + "\n");
 
-                    let new_content: Vec<&str> = content.lines().collect();
-
-                    fs::write(path, new_content.join("\n") + "\n")
+                    fs::write(path, new_content)
                 } else {
                     writeln!(err_direction, "history: invalid file path")
                 }
@@ -376,11 +378,12 @@ where
                 if let Some(path) = user_inputs.get(2).map(Path::new) {
                     let _ = history.append(path);
 
-                    let content = std::fs::read_to_string(path)?;
+                    let new_content = std::fs::read_to_string(path)?
+                        .lines()
+                        .skip(1)
+                        .fold(String::new(), |acc, x| acc + x + "\n");
 
-                    let new_content: Vec<&str> = content.lines().skip(1).collect();
-
-                    fs::write(path, new_content.join("\n") + "\n")
+                    fs::write(path, new_content)
                 } else {
                     writeln!(err_direction, "history: invalid file path")
                 }
