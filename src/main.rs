@@ -365,7 +365,7 @@ where
 
                     let content = std::fs::read_to_string(path)?;
 
-                    let new_content: Vec<&str> = content.lines().skip(1).collect();
+                    let new_content: Vec<&str> = content.lines().collect();
 
                     fs::write(path, new_content.join("\n") + "\n")
                 } else {
@@ -378,7 +378,7 @@ where
 
                     let content = std::fs::read_to_string(path)?;
 
-                    let new_content: Vec<&str> = content.lines().collect();
+                    let new_content: Vec<&str> = content.lines().skip(1).collect();
 
                     fs::write(path, new_content.join("\n") + "\n")
                 } else {
