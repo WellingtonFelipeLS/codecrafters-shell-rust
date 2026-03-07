@@ -1,4 +1,3 @@
-use std::fs;
 use std::io::{self, PipeReader, PipeWriter, Read, Stderr, Stdout, Write, pipe, stdout};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -7,6 +6,7 @@ use std::{
     collections::HashSet,
     fs::{DirEntry, File},
 };
+use std::{env, fs};
 use std::{
     env::{set_current_dir, split_paths, var},
     ffi::OsStr,
@@ -503,6 +503,12 @@ fn main() -> rustyline::Result<()> {
     editor.bind_sequence(KeyEvent(KeyCode::Up, Modifiers::NONE), Cmd::PreviousHistory);
 
     editor.set_history_ignore_dups(false)?;
+
+    if let Some(history_filepath) =
+        env::vars().find_map(|(k, v)| if k == "HISTFILE" { Some(v) } else { None })
+    {
+        editor.load_history(&history_filepath)?;
+    }
 
     loop {
         let _ = main_loop(&mut editor, &builtins, &executable_paths);
