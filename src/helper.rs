@@ -1,28 +1,32 @@
 use std::collections::HashMap;
 
 use rustyline::{
-    Helper, completion::Completer, highlight::Highlighter, hint::Hinter, validate::Validator,
+    Helper,
+    completion::{Completer, FilenameCompleter, Pair},
+    highlight::Highlighter,
+    hint::Hinter,
+    validate::Validator,
 };
 
 #[derive(Debug)]
-pub struct MyHelper(HashMap<char, MyHelper>); // Trie
+struct Trie(HashMap<char, Trie>); // Trie
 
-impl MyHelper {
+impl Trie {
     pub fn new() -> Self {
-        MyHelper(HashMap::new())
+        Trie(HashMap::new())
     }
 
     pub fn insert(&mut self, word: &str) {
         word.chars()
             .chain(std::iter::once('\0'))
-            .fold(self, |acc, c| acc.0.entry(c).or_insert_with(MyHelper::new));
+            .fold(self, |acc, c| acc.0.entry(c).or_insert_with(Trie::new));
     }
 
     pub fn starts_with(&self, prefix: &str) -> Vec<String> {
         let mut result = Vec::new();
 
         if let Some(trie_root) = prefix.chars().try_fold(self, |acc, c| acc.0.get(&c)) {
-            let mut v: Vec<(String, &MyHelper)> = trie_root
+            let mut v: Vec<(String, &Trie)> = trie_root
                 .0
                 .iter()
                 .map(|(&c, helper)| {
@@ -51,13 +55,27 @@ impl MyHelper {
     }
 }
 
+pub struct MyHelper {
+    commands: Trie,
+    file_completer: FilenameCompleter,
+}
+
+impl MyHelper {
+    fn new() -> Self {
+        Self {
+            commands: Trie::new(),
+            file_completer: FilenameCompleter::new(),
+        }
+    }
+}
+
 impl<'a, T> From<T> for MyHelper
 where
     T: Iterator<Item = &'a str>,
 {
-    fn from(words: T) -> Self {
-        words.fold(MyHelper::new(), |mut acc, word| {
-            acc.insert(word);
+    fn from(commands: T) -> Self {
+        commands.fold(MyHelper::new(), |mut acc, word| {
+            acc.commands.insert(word);
             acc
         })
     }
@@ -68,23 +86,36 @@ impl Highlighter for MyHelper {}
 impl Validator for MyHelper {}
 
 impl Completer for MyHelper {
-    type Candidate = String;
+    type Candidate = Pair;
 
     fn complete(
         &self,
         line: &str,
-        _pos: usize,
-        _ctx: &rustyline::Context<'_>,
+        pos: usize,
+        ctx: &rustyline::Context<'_>,
     ) -> rustyline::Result<(usize, Vec<Self::Candidate>)> {
-        let mut candidates = self.starts_with(line);
+        if line.contains(" ") {
+            self.file_completer.complete(line, pos, ctx)
+        } else {
+            let mut candidates = self.commands.starts_with(line);
 
-        if candidates.len() == 1
-            && let Some(x) = candidates.get_mut(0)
-        {
-            x.push(' ')
+            if candidates.len() == 1
+                && let Some(x) = candidates.get_mut(0)
+            {
+                x.push(' ')
+            }
+
+            Ok((
+                0,
+                candidates
+                    .into_iter()
+                    .map(|cmd| Pair {
+                        display: cmd.clone(),
+                        replacement: cmd,
+                    })
+                    .collect(),
+            ))
         }
-
-        Ok((0, candidates))
     }
 }
 
