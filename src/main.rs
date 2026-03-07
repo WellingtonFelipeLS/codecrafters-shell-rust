@@ -376,12 +376,11 @@ where
                 if let Some(path) = user_inputs.get(2).map(Path::new) {
                     let _ = history.append(path);
 
-                    // let content = std::fs::read_to_string(path)?;
-                    //
-                    // let new_content: Vec<&str> = content.lines().skip(1).collect();
-                    //
-                    // fs::write(path, new_content.join("\n") + "\n")
-                    Ok(())
+                    let content = std::fs::read_to_string(path)?;
+
+                    let new_content: Vec<&str> = content.lines().skip(1).collect();
+
+                    fs::write(path, new_content.join("\n") + "\n")
                 } else {
                     writeln!(err_direction, "history: invalid file path")
                 }
