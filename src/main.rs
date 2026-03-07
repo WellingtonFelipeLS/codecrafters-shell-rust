@@ -288,7 +288,7 @@ where
             {
                 let history_filepath = Path::new(&history_filepath);
 
-                let _ = history.save(history_filepath);
+                let _ = history.append(history_filepath);
 
                 let content = std::fs::read_to_string(history_filepath)?;
 
