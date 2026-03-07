@@ -292,7 +292,7 @@ where
 
                 let new_content = std::fs::read_to_string(history_filepath)?
                     .lines()
-                    .skip(1)
+                    .filter(|line| line != &"#V2")
                     .fold(String::new(), |acc, x| acc + x + "\n");
 
                 fs::write(history_filepath, new_content)?;
@@ -366,7 +366,7 @@ where
 
                     let new_content = std::fs::read_to_string(path)?
                         .lines()
-                        .skip(1)
+                        .filter(|line| line != &"#V2")
                         .fold(String::new(), |acc, x| acc + x + "\n");
 
                     fs::write(path, new_content)
@@ -380,7 +380,7 @@ where
 
                     let new_content = std::fs::read_to_string(path)?
                         .lines()
-                        .skip(1)
+                        .filter(|line| line != &"#V2")
                         .fold(String::new(), |acc, x| acc + x + "\n");
 
                     fs::write(path, new_content)
