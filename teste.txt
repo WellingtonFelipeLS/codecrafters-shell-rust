@@ -1,0 +1,11 @@
+echo mango grape pear
+echo blueberry raspberry banana
+echo pear orange mango
+echo raspberry apple
+echo raspberry blueberry
+history -a teste.txt
+echo mango pear orange
+history -a teste.txt
+history
+cat teste.txt
+exit

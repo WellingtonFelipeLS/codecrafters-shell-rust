@@ -290,11 +290,11 @@ where
 
                 let _ = history.append(history_filepath);
 
-                let content = std::fs::read_to_string(history_filepath)?;
-
-                let new_content: Vec<&str> = content.lines().skip(1).collect();
-
-                fs::write(history_filepath, new_content.join("\n") + "\n")?;
+                // let content = std::fs::read_to_string(history_filepath)?;
+                //
+                // let new_content: Vec<&str> = content.lines().skip(1).collect();
+                //
+                // fs::write(history_filepath, new_content.join("\n") + "\n")?;
             }
             exit(0)
         }
