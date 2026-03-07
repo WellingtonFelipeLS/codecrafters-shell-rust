@@ -99,6 +99,8 @@ impl Completer for MyHelper {
 
             if candidates.len() == 1
                 && let Some(x) = candidates.get_mut(0)
+                && !x.display.ends_with("/")
+                && !x.replacement.ends_with("/")
             {
                 x.display.push(' ');
                 x.replacement.push(' ');
