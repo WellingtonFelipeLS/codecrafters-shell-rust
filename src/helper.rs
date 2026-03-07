@@ -95,7 +95,16 @@ impl Completer for MyHelper {
         ctx: &rustyline::Context<'_>,
     ) -> rustyline::Result<(usize, Vec<Self::Candidate>)> {
         if line.contains(" ") {
-            self.file_completer.complete(line, pos, ctx)
+            let (n, mut candidates) = self.file_completer.complete(line, pos, ctx)?;
+
+            if candidates.len() == 1
+                && let Some(x) = candidates.get_mut(0)
+            {
+                x.display.push(' ');
+                x.replacement.push(' ');
+            }
+
+            Ok((n, candidates))
         } else {
             let mut candidates = self.commands.starts_with(line);
 
