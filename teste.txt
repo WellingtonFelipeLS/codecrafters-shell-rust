@@ -9,3 +9,6 @@ history -a teste.txt
 history
 cat teste.txt
 exit
+cat teste.txt
+history
+exit
