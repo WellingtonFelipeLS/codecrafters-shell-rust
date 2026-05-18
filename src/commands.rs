@@ -1,12 +1,13 @@
 use crate::utils;
 use rustyline::history::{self, History};
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     env, ffi, fs,
     io::{self, Read, Write},
     path, process,
 };
 
+#[allow(clippy::too_many_arguments)]
 pub fn call_command_with_args<I>(
     mut user_inputs: Vec<String>,
     builtins: &HashSet<&str>,
@@ -14,6 +15,7 @@ pub fn call_command_with_args<I>(
     history: &mut history::FileHistory,
     input_reader: Option<I>,
     children: &mut Vec<process::Child>,
+    variable_map: &mut HashMap<String, String>,
     process_position: utils::ProcessPosition,
 ) -> io::Result<Option<io::PipeReader>>
 where
@@ -44,7 +46,12 @@ where
         Some("history") => {
             history_command(&user_inputs[1..], history, output_direction, err_direction)
         }
-        Some("declare") => declare(&user_inputs[1..], err_direction),
+        Some("declare") => declare(
+            &user_inputs[1..],
+            variable_map,
+            output_direction,
+            err_direction,
+        ),
         Some(command) => {
             if let Some(child) = command_exec(
                 command,
@@ -207,10 +214,23 @@ fn history_command(
     }
 }
 
-fn declare(user_inputs: &[String], mut err_direction: utils::ErrDirection) -> io::Result<()> {
+fn declare(
+    user_inputs: &[String],
+    variable_map: &mut HashMap<String, String>,
+    mut output_direction: utils::OutputDirection,
+    mut err_direction: utils::ErrDirection,
+) -> io::Result<()> {
     match user_inputs.first().map(String::as_str) {
-        Some("-p") if let Some(variable) = user_inputs.get(1) => {
-            writeln!(err_direction, "declare: {variable}: not found")
+        Some(x) if let Some((name, value)) = x.split_once('=') => {
+            variable_map.insert(name.into(), value.into());
+            Ok(())
+        }
+        Some("-p") if let Some(name) = user_inputs.get(1) => {
+            if let Some(value) = variable_map.get(name) {
+                writeln!(output_direction, "declare -- {name}={value:?}")
+            } else {
+                writeln!(err_direction, "declare: {name}: not found")
+            }
         }
         _ => todo!(),
     }

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::env;
 use std::env::{split_paths, var};
 use std::io::{self};
@@ -18,6 +19,7 @@ fn main_loop(
     editor: &mut Editor<MyHelper, FileHistory>,
     builtins: &HashSet<&str>,
     executable_paths: &[&DirEntry],
+    variable_map: &mut HashMap<String, String>,
 ) -> Result<(), io::Error> {
     let readline = match editor.readline("$ ") {
         Ok(x) => x,
@@ -59,6 +61,7 @@ fn main_loop(
                 editor.history_mut(),
                 input_reader,
                 &mut children,
+                variable_map,
                 utils::ProcessPosition::new(idx, len),
             )
         },
@@ -99,6 +102,8 @@ fn main() -> rustyline::Result<()> {
         .bell_style(BellStyle::Audible)
         .build();
 
+    let mut variable_map = HashMap::new();
+
     let mut editor: Editor<MyHelper, _> = Editor::with_config(config)?;
     editor.set_helper(Some(MyHelper::from(
         builtins
@@ -118,6 +123,6 @@ fn main() -> rustyline::Result<()> {
     }
 
     loop {
-        let _ = main_loop(&mut editor, &builtins, &executable_paths);
+        let _ = main_loop(&mut editor, &builtins, &executable_paths, &mut variable_map);
     }
 }
