@@ -222,8 +222,19 @@ fn declare(
 ) -> io::Result<()> {
     match user_inputs.first().map(String::as_str) {
         Some(x) if let Some((name, value)) = x.split_once('=') => {
-            variable_map.insert(name.into(), value.into());
-            Ok(())
+            let mut chars = name.chars();
+            let first_char = chars.next();
+            if first_char.is_some_and(|x| x.is_ascii_alphabetic() || x == '_')
+                && chars.all(|x| x.is_ascii_alphanumeric() || x == '_')
+            {
+                variable_map.insert(name.into(), value.into());
+                Ok(())
+            } else {
+                writeln!(
+                    err_direction,
+                    "declare: `{name}={value}': not a valid identifier"
+                )
+            }
         }
         Some("-p") if let Some(name) = user_inputs.get(1) => {
             if let Some(value) = variable_map.get(name) {
