@@ -44,6 +44,7 @@ where
         Some("history") => {
             history_command(&user_inputs[1..], history, output_direction, err_direction)
         }
+        Some("declare") => declare(&user_inputs[1..], err_direction),
         Some(command) => {
             if let Some(child) = command_exec(
                 command,
@@ -203,6 +204,15 @@ fn history_command(
                 writeln!(err_direction, "history: invalid number")
             }
         }
+    }
+}
+
+fn declare(user_inputs: &[String], mut err_direction: utils::ErrDirection) -> io::Result<()> {
+    match user_inputs.first().map(String::as_str) {
+        Some("-p") if let Some(variable) = user_inputs.get(1) => {
+            writeln!(err_direction, "declare: {variable}: not found")
+        }
+        _ => todo!(),
     }
 }
 
