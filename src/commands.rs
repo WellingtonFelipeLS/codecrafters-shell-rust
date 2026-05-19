@@ -52,6 +52,7 @@ where
             output_direction,
             err_direction,
         ),
+        Some("jobs") => Ok(()),
         Some(command) => {
             if let Some(child) = command_exec(
                 command,
@@ -243,7 +244,9 @@ fn declare(
                 writeln!(err_direction, "declare: {name}: not found")
             }
         }
-        _ => Ok(()),
+        _ => shell_variables
+            .iter()
+            .try_for_each(|(name, value)| writeln!(output_direction, "{name}={value:?}")),
     }
 }
 
