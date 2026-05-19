@@ -264,11 +264,7 @@ impl BackGroundJobs {
 
     pub fn append(&mut self, input: Vec<String>) {
         if let Some((command, args)) = input.split_first()
-            && let Some(child) = process::Command::new(command)
-                .args(args)
-                .stdout(process::Stdio::null())
-                .spawn()
-                .ok()
+            && let Some(child) = process::Command::new(command).args(args).spawn().ok()
         {
             println!("[{}] {}", self.next_job_id, child.id());
 
