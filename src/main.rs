@@ -19,7 +19,7 @@ fn main_loop(
     editor: &mut Editor<MyHelper, FileHistory>,
     builtins: &HashSet<&str>,
     executable_paths: &[&DirEntry],
-    variable_map: &mut HashMap<String, String>,
+    shell_variables: &mut HashMap<String, String>,
 ) -> Result<(), io::Error> {
     let readline = match editor.readline("$ ") {
         Ok(x) => x,
@@ -28,18 +28,29 @@ fn main_loop(
 
     let mut processed_user_inputs = Vec::new();
 
-    let last_input =
-        utils::read_user_input(&readline)
-            .into_iter()
-            .fold(Vec::new(), |mut acc, x| {
-                if x.as_str() == "|" {
-                    processed_user_inputs.push(acc);
-                    Vec::new()
-                } else {
-                    acc.push(x);
-                    acc
-                }
-            });
+    let last_input = utils::read_user_input(&readline)
+        .into_iter()
+        .map(|x| {
+            let mut splits = x.split('$');
+            let first_split = splits.next().unwrap_or("").to_owned();
+            splits
+                .map(|variable_candidate| {
+                    shell_variables
+                        .get(variable_candidate)
+                        .map(String::as_str)
+                        .unwrap_or(variable_candidate)
+                })
+                .fold(first_split, |acc, x| acc + x)
+        })
+        .fold(Vec::new(), |mut acc, x| {
+            if x.as_str() == "|" {
+                processed_user_inputs.push(acc);
+                Vec::new()
+            } else {
+                acc.push(x);
+                acc
+            }
+        });
 
     processed_user_inputs.push(last_input);
 
@@ -61,7 +72,7 @@ fn main_loop(
                 editor.history_mut(),
                 input_reader,
                 &mut children,
-                variable_map,
+                shell_variables,
                 utils::ProcessPosition::new(idx, len),
             )
         },
@@ -102,7 +113,7 @@ fn main() -> rustyline::Result<()> {
         .bell_style(BellStyle::Audible)
         .build();
 
-    let mut variable_map = HashMap::new();
+    let mut shell_variables = HashMap::new();
 
     let mut editor: Editor<MyHelper, _> = Editor::with_config(config)?;
     editor.set_helper(Some(MyHelper::from(
@@ -123,6 +134,11 @@ fn main() -> rustyline::Result<()> {
     }
 
     loop {
-        let _ = main_loop(&mut editor, &builtins, &executable_paths, &mut variable_map);
+        let _ = main_loop(
+            &mut editor,
+            &builtins,
+            &executable_paths,
+            &mut shell_variables,
+        );
     }
 }

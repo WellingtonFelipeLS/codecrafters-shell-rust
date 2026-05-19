@@ -15,7 +15,7 @@ pub fn call_command_with_args<I>(
     history: &mut history::FileHistory,
     input_reader: Option<I>,
     children: &mut Vec<process::Child>,
-    variable_map: &mut HashMap<String, String>,
+    shell_variables: &mut HashMap<String, String>,
     process_position: utils::ProcessPosition,
 ) -> io::Result<Option<io::PipeReader>>
 where
@@ -33,13 +33,13 @@ where
 
     match user_inputs.first().map(String::as_str) {
         Some("exit") => exit(history),
-        Some("echo") => echo(output_direction, &user_inputs[1..]),
+        Some("echo") => echo(&user_inputs[1..], output_direction),
         Some("type") => type_command(
-            output_direction,
-            err_direction,
             &user_inputs[1..],
             builtins,
             executable_paths,
+            output_direction,
+            err_direction,
         ),
         Some("pwd") => pwd(output_direction),
         Some("cd") => cd(&user_inputs[1..], err_direction),
@@ -48,7 +48,7 @@ where
         }
         Some("declare") => declare(
             &user_inputs[1..],
-            variable_map,
+            shell_variables,
             output_direction,
             err_direction,
         ),
@@ -92,16 +92,16 @@ fn exit(history: &mut history::FileHistory) -> io::Result<()> {
     process::exit(0);
 }
 
-fn echo(mut output_direction: utils::OutputDirection, user_inputs: &[String]) -> io::Result<()> {
+fn echo(user_inputs: &[String], mut output_direction: utils::OutputDirection) -> io::Result<()> {
     writeln!(output_direction, "{}", user_inputs.join(" "))
 }
 
 fn type_command(
-    mut output_direction: utils::OutputDirection,
-    mut err_direction: utils::ErrDirection,
     user_inputs: &[String],
     builtins: &HashSet<&str>,
     executable_paths: &[&fs::DirEntry],
+    mut output_direction: utils::OutputDirection,
+    mut err_direction: utils::ErrDirection,
 ) -> Result<(), io::Error> {
     if let Some(command) = user_inputs.first() {
         if builtins.contains(command.as_str()) {
@@ -216,7 +216,7 @@ fn history_command(
 
 fn declare(
     user_inputs: &[String],
-    variable_map: &mut HashMap<String, String>,
+    shell_variables: &mut HashMap<String, String>,
     mut output_direction: utils::OutputDirection,
     mut err_direction: utils::ErrDirection,
 ) -> io::Result<()> {
@@ -227,7 +227,7 @@ fn declare(
             if first_char.is_some_and(|x| x.is_ascii_alphabetic() || x == '_')
                 && chars.all(|x| x.is_ascii_alphanumeric() || x == '_')
             {
-                variable_map.insert(name.into(), value.into());
+                shell_variables.insert(name.into(), value.into());
                 Ok(())
             } else {
                 writeln!(
@@ -237,13 +237,13 @@ fn declare(
             }
         }
         Some("-p") if let Some(name) = user_inputs.get(1) => {
-            if let Some(value) = variable_map.get(name) {
+            if let Some(value) = shell_variables.get(name) {
                 writeln!(output_direction, "declare -- {name}={value:?}")
             } else {
                 writeln!(err_direction, "declare: {name}: not found")
             }
         }
-        _ => todo!(),
+        _ => Ok(()),
     }
 }
 
