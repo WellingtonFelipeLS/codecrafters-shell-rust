@@ -279,21 +279,36 @@ impl BackGroundJobs {
         let mut iter = self.jobs.iter_mut();
 
         let most_recent_job = iter.next_back();
+        let second_most_recent_job = iter.next_back();
 
         iter.try_for_each(|(job_id, (input, child))| {
-            if child.try_wait().is_ok() {
-                writeln!(writer, "[{job_id}]  Running{:17}{input}", " ")
-            } else {
-                todo!()
-            }
+            Self::print_into(*job_id, input, child, writer, ' ')
         })?;
 
-        if let Some((job_id, (input, child))) = most_recent_job
-            && child.try_wait().is_ok()
-        {
-            writeln!(writer, "[{job_id}]+  Running{:17}{input}", " ")
+        if let Some((job_id, (input, child))) = second_most_recent_job {
+            Self::print_into(*job_id, input, child, writer, '-')
         } else {
             write!(writer, "")
+        }?;
+
+        if let Some((job_id, (input, child))) = most_recent_job {
+            Self::print_into(*job_id, input, child, writer, '+')
+        } else {
+            write!(writer, "")
+        }
+    }
+
+    fn print_into(
+        job_id: usize,
+        input: &str,
+        child: &mut process::Child,
+        writer: &mut impl io::Write,
+        marker: char,
+    ) -> io::Result<()> {
+        if child.try_wait().is_ok() {
+            writeln!(writer, "[{job_id}]{marker}  Running{:17}{input}", " ")
+        } else {
+            todo!()
         }
     }
 }
