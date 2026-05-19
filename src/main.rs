@@ -35,12 +35,20 @@ fn main_loop(
             let first_split = splits.next().unwrap_or("").to_owned();
             splits
                 .map(|variable_candidate| {
-                    shell_variables
-                        .get(variable_candidate)
-                        .map(String::as_str)
-                        .unwrap_or(variable_candidate)
+                    let (var, sufix) = variable_candidate
+                        .strip_prefix('{')
+                        .and_then(|x| x.split_once('}'))
+                        .unwrap_or((variable_candidate, ""));
+
+                    (
+                        shell_variables
+                            .get(var)
+                            .map(String::as_str)
+                            .unwrap_or(variable_candidate),
+                        sufix,
+                    )
                 })
-                .fold(first_split, |acc, x| acc + x)
+                .fold(first_split, |acc, (prefix, sufix)| acc + prefix + sufix)
         })
         .fold(Vec::new(), |mut acc, x| {
             if x.as_str() == "|" {
