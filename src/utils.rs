@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, fs, io, os::unix::fs::PermissionsExt, process};
+use std::{collections::BTreeMap, fs, io, mem, os::unix::fs::PermissionsExt, process};
 
 pub enum OutputDirection {
     File(fs::File),
@@ -262,13 +262,11 @@ impl BackGroundJobs {
         }
     }
 
-    pub fn append(&mut self, mut input: Vec<String>) {
+    pub fn append(&mut self, input: Vec<String>) {
         if let Some((command, args)) = input.split_first()
             && let Some(child) = process::Command::new(command).args(args).spawn().ok()
         {
             println!("[{}] {}", self.next_job_id, child.id());
-
-            input.push("&".to_owned());
 
             self.jobs.insert(self.next_job_id, (input.join(" "), child));
             self.next_job_id += 1;
@@ -276,39 +274,43 @@ impl BackGroundJobs {
     }
 
     pub fn list(&mut self, writer: &mut impl io::Write) -> io::Result<()> {
-        let mut iter = self.jobs.iter_mut();
+        let mut iter = mem::take(&mut self.jobs).into_iter();
 
         let most_recent_job = iter.next_back();
         let second_most_recent_job = iter.next_back();
 
         iter.try_for_each(|(job_id, (input, child))| {
-            Self::print_into(*job_id, input, child, writer, ' ')
+            self.print_and_reap(job_id, input, child, writer, ' ')
         })?;
 
         if let Some((job_id, (input, child))) = second_most_recent_job {
-            Self::print_into(*job_id, input, child, writer, '-')
-        } else {
-            write!(writer, "")
-        }?;
+            self.print_and_reap(job_id, input, child, writer, '-')?;
+        };
 
         if let Some((job_id, (input, child))) = most_recent_job {
-            Self::print_into(*job_id, input, child, writer, '+')
-        } else {
-            write!(writer, "")
+            self.print_and_reap(job_id, input, child, writer, '+')?;
         }
+
+        Ok(())
     }
 
-    fn print_into(
+    fn print_and_reap(
+        &mut self,
         job_id: usize,
-        input: &str,
-        child: &mut process::Child,
+        input: String,
+        mut child: process::Child,
         writer: &mut impl io::Write,
         marker: char,
     ) -> io::Result<()> {
-        if child.try_wait().is_ok() {
-            writeln!(writer, "[{job_id}]{marker}  Running{:17}{input}", " ")
-        } else {
-            todo!()
+        match child.try_wait() {
+            Ok(Some(_)) => writeln!(writer, "[{job_id}]{marker}  Done{:17}{input}", " "),
+            Ok(None) => {
+                writeln!(writer, "[{job_id}]{marker}  Running{:17}{input} &", " ")?;
+                self.jobs.insert(job_id, (input, child));
+
+                Ok(())
+            }
+            Err(_) => todo!(),
         }
     }
 }
