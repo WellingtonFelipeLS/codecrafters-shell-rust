@@ -41,15 +41,13 @@ fn main_loop(
                         .unwrap_or((variable_candidate, ""));
 
                     (
-                        shell_variables
-                            .get(var)
-                            .map(String::as_str)
-                            .unwrap_or(variable_candidate),
+                        shell_variables.get(var).map(String::as_str).unwrap_or(""),
                         sufix,
                     )
                 })
                 .fold(first_split, |acc, (prefix, sufix)| acc + prefix + sufix)
         })
+        .filter(|x| !x.is_empty())
         .fold(Vec::new(), |mut acc, x| {
             if x.as_str() == "|" {
                 processed_user_inputs.push(acc);
