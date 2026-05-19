@@ -20,6 +20,7 @@ fn main_loop(
     builtins: &HashSet<&str>,
     executable_paths: &[&DirEntry],
     shell_variables: &mut HashMap<String, String>,
+    background_jobs: &mut utils::BackGroundJobs,
 ) -> Result<(), io::Error> {
     let readline = match editor.readline("$ ") {
         Ok(x) => x,
@@ -27,6 +28,8 @@ fn main_loop(
     };
 
     let mut processed_user_inputs = Vec::new();
+
+    let mut background_inputs = Vec::new();
 
     let last_input = utils::read_user_input(&readline)
         .into_iter()
@@ -48,11 +51,16 @@ fn main_loop(
                 .fold(first_split, |acc, (prefix, sufix)| acc + prefix + sufix)
         })
         .filter(|x| !x.is_empty())
-        .fold(Vec::new(), |mut acc, x| {
-            if x.as_str() == "|" {
+        .fold(Vec::new(), |mut acc, x| match x.as_str() {
+            "|" => {
                 processed_user_inputs.push(acc);
                 Vec::new()
-            } else {
+            }
+            "&" => {
+                background_inputs.push(acc);
+                Vec::new()
+            }
+            _ => {
                 acc.push(x);
                 acc
             }
@@ -63,6 +71,10 @@ fn main_loop(
     if !readline.is_empty() {
         let _ = editor.add_history_entry(readline);
     }
+
+    background_inputs
+        .into_iter()
+        .for_each(|x| background_jobs.append(x));
 
     let len = processed_user_inputs.len();
 
@@ -79,6 +91,7 @@ fn main_loop(
                 input_reader,
                 &mut children,
                 shell_variables,
+                background_jobs,
                 utils::ProcessPosition::new(idx, len),
             )
         },
@@ -123,6 +136,8 @@ fn main() -> rustyline::Result<()> {
 
     let mut shell_variables = HashMap::new();
 
+    let mut background_jobs = utils::BackGroundJobs::new();
+
     let mut editor: Editor<MyHelper, _> = Editor::with_config(config)?;
     editor.set_helper(Some(MyHelper::from(
         builtins
@@ -147,6 +162,7 @@ fn main() -> rustyline::Result<()> {
             &builtins,
             &executable_paths,
             &mut shell_variables,
+            &mut background_jobs,
         );
     }
 }

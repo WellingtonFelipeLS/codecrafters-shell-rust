@@ -16,6 +16,7 @@ pub fn call_command_with_args<I>(
     input_reader: Option<I>,
     children: &mut Vec<process::Child>,
     shell_variables: &mut HashMap<String, String>,
+    background_jobs: &mut utils::BackGroundJobs,
     process_position: utils::ProcessPosition,
 ) -> io::Result<Option<io::PipeReader>>
 where
@@ -52,7 +53,7 @@ where
             output_direction,
             err_direction,
         ),
-        Some("jobs") => Ok(()),
+        Some("jobs") => jobs(background_jobs, output_direction),
         Some(command) => {
             if let Some(child) = command_exec(
                 command,
@@ -250,6 +251,13 @@ fn declare(
     }
 }
 
+fn jobs(
+    background_jobs: &mut utils::BackGroundJobs,
+    mut output_direction: utils::OutputDirection,
+) -> io::Result<()> {
+    background_jobs.list(&mut output_direction)
+}
+
 fn command_exec<I>(
     command: &str,
     user_inputs: &[String],
@@ -266,7 +274,7 @@ where
     child_command.args(user_inputs.iter().map(ffi::OsStr::new));
 
     if !process_position.is_first() {
-        child_command.stdin(input_reader.unwrap());
+        child_command.stdin(input_reader.expect("Expect input reader in first process"));
     }
 
     child_command.stdout(output_direction).stderr(err_direction);

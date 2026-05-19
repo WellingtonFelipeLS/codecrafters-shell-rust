@@ -1,4 +1,4 @@
-use std::{fs, io, os::unix::fs::PermissionsExt, process};
+use std::{collections::HashMap, fs, io, os::unix::fs::PermissionsExt, process};
 
 pub enum OutputDirection {
     File(fs::File),
@@ -247,4 +247,39 @@ pub fn verify_out_and_err_direction(
     };
 
     Ok(result)
+}
+
+pub struct BackGroundJobs {
+    jobs: HashMap<usize, process::Child>,
+    next_job_id: usize,
+}
+
+impl BackGroundJobs {
+    pub fn new() -> Self {
+        Self {
+            jobs: HashMap::new(),
+            next_job_id: 1,
+        }
+    }
+
+    pub fn append(&mut self, input: Vec<String>) {
+        if let Some((command, args)) = input.split_first()
+            && let Some(child) = process::Command::new(command)
+                .args(args)
+                .stdout(process::Stdio::null())
+                .spawn()
+                .ok()
+        {
+            println!("[{}] {}", self.next_job_id, child.id());
+
+            self.jobs.insert(self.next_job_id, child);
+            self.next_job_id += 1;
+        }
+    }
+
+    pub fn list(&self, writer: &mut impl io::Write) -> io::Result<()> {
+        self.jobs
+            .iter()
+            .try_for_each(|(job_id, child)| writeln!(writer, "[{job_id}] {}", child.id()))
+    }
 }
