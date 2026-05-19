@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs, io, os::unix::fs::PermissionsExt, process};
+use std::{collections::BTreeMap, fs, io, os::unix::fs::PermissionsExt, process};
 
 pub enum OutputDirection {
     File(fs::File),
@@ -250,32 +250,50 @@ pub fn verify_out_and_err_direction(
 }
 
 pub struct BackGroundJobs {
-    jobs: HashMap<usize, process::Child>,
+    jobs: BTreeMap<usize, (String, process::Child)>,
     next_job_id: usize,
 }
 
 impl BackGroundJobs {
     pub fn new() -> Self {
         Self {
-            jobs: HashMap::new(),
+            jobs: BTreeMap::new(),
             next_job_id: 1,
         }
     }
 
-    pub fn append(&mut self, input: Vec<String>) {
+    pub fn append(&mut self, mut input: Vec<String>) {
         if let Some((command, args)) = input.split_first()
             && let Some(child) = process::Command::new(command).args(args).spawn().ok()
         {
             println!("[{}] {}", self.next_job_id, child.id());
 
-            self.jobs.insert(self.next_job_id, child);
+            input.push("&".to_owned());
+
+            self.jobs.insert(self.next_job_id, (input.join(" "), child));
             self.next_job_id += 1;
         }
     }
 
-    pub fn list(&self, writer: &mut impl io::Write) -> io::Result<()> {
-        self.jobs
-            .iter()
-            .try_for_each(|(job_id, child)| writeln!(writer, "[{job_id}] {}", child.id()))
+    pub fn list(&mut self, writer: &mut impl io::Write) -> io::Result<()> {
+        let mut iter = self.jobs.iter_mut();
+
+        let most_recent_job = iter.next_back();
+
+        iter.try_for_each(|(job_id, (input, child))| {
+            if child.try_wait().is_ok() {
+                writeln!(writer, "[{job_id}]  Running{:17}{input}", " ")
+            } else {
+                todo!()
+            }
+        })?;
+
+        if let Some((job_id, (input, child))) = most_recent_job
+            && child.try_wait().is_ok()
+        {
+            writeln!(writer, "[{job_id}]+  Running{:17}{input}", " ")
+        } else {
+            write!(writer, "")
+        }
     }
 }
