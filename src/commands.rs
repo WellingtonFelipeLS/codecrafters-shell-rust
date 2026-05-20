@@ -54,6 +54,7 @@ where
             err_direction,
         ),
         Some("jobs") => jobs(background_jobs, output_direction),
+        Some("complete") => todo!(),
         Some(command) => {
             if let Some(child) = command_exec(
                 command,

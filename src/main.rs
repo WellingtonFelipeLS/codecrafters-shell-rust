@@ -118,7 +118,7 @@ fn main() -> rustyline::Result<()> {
         .unwrap_or_default();
 
     let builtins = HashSet::from([
-        "exit", "echo", "type", "pwd", "cd", "history", "declare", "jobs",
+        "exit", "echo", "type", "pwd", "cd", "history", "declare", "jobs", "complete",
     ]);
 
     let executable_paths = path_variable
