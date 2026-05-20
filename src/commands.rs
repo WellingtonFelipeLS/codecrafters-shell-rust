@@ -54,7 +54,7 @@ where
             err_direction,
         ),
         Some("jobs") => jobs(background_jobs, output_direction),
-        Some("complete") => todo!(),
+        Some("complete") => complete(&user_inputs[1..], err_direction),
         Some(command) => {
             if let Some(child) = command_exec(
                 command,
@@ -257,6 +257,16 @@ fn jobs(
     mut output_direction: utils::OutputDirection,
 ) -> io::Result<()> {
     background_jobs.list(&mut output_direction)
+}
+
+fn complete(user_inputs: &[String], mut err_direction: utils::ErrDirection) -> io::Result<()> {
+    match user_inputs.first().map(String::as_str) {
+        Some("-p") if let Some(command) = user_inputs.get(1) => writeln!(
+            err_direction,
+            "complete: {command}: no completion specification"
+        ),
+        _ => writeln!(err_direction, "Error"),
+    }
 }
 
 fn command_exec<I>(
