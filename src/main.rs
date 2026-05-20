@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::env;
 use std::env::{split_paths, var};
-use std::io::{self};
+use std::io;
 use std::path::Path;
 use std::{collections::HashSet, fs::DirEntry};
 
@@ -21,6 +21,7 @@ fn main_loop(
     executable_paths: &[&DirEntry],
     shell_variables: &mut HashMap<String, String>,
     background_jobs: &mut utils::BackGroundJobs,
+    completion_scripts: &mut HashMap<String, String>,
 ) -> Result<(), io::Error> {
     background_jobs.check_jobs()?;
 
@@ -94,6 +95,7 @@ fn main_loop(
                 &mut children,
                 shell_variables,
                 background_jobs,
+                completion_scripts,
                 utils::ProcessPosition::new(idx, len),
             )
         },
@@ -140,6 +142,8 @@ fn main() -> rustyline::Result<()> {
 
     let mut background_jobs = utils::BackGroundJobs::new();
 
+    let mut completion_scripts = HashMap::new();
+
     let mut editor: Editor<MyHelper, _> = Editor::with_config(config)?;
     editor.set_helper(Some(MyHelper::from(
         builtins
@@ -165,6 +169,7 @@ fn main() -> rustyline::Result<()> {
             &executable_paths,
             &mut shell_variables,
             &mut background_jobs,
+            &mut completion_scripts,
         );
     }
 }

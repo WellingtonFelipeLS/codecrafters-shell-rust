@@ -17,6 +17,7 @@ pub fn call_command_with_args<I>(
     children: &mut Vec<process::Child>,
     shell_variables: &mut HashMap<String, String>,
     background_jobs: &mut utils::BackGroundJobs,
+    completion_scripts: &mut HashMap<String, String>,
     process_position: utils::ProcessPosition,
 ) -> io::Result<Option<io::PipeReader>>
 where
@@ -54,7 +55,12 @@ where
             err_direction,
         ),
         Some("jobs") => jobs(background_jobs, output_direction),
-        Some("complete") => complete(&user_inputs[1..], err_direction),
+        Some("complete") => complete(
+            &user_inputs[1..],
+            completion_scripts,
+            output_direction,
+            err_direction,
+        ),
         Some(command) => {
             if let Some(child) = command_exec(
                 command,
@@ -259,13 +265,28 @@ fn jobs(
     background_jobs.list(&mut output_direction)
 }
 
-fn complete(user_inputs: &[String], mut err_direction: utils::ErrDirection) -> io::Result<()> {
+fn complete(
+    user_inputs: &[String],
+    completion_scripts: &mut HashMap<String, String>,
+    mut output_direction: utils::OutputDirection,
+    mut err_direction: utils::ErrDirection,
+) -> io::Result<()> {
     match user_inputs.first().map(String::as_str) {
-        Some("-p") if let Some(command) = user_inputs.get(1) => writeln!(
-            err_direction,
-            "complete: {command}: no completion specification"
-        ),
-        _ => writeln!(err_direction, "Error"),
+        Some("-C") if let Some([path, command]) = user_inputs.get(1..=2) => {
+            completion_scripts.insert(command.clone(), path.clone());
+            Ok(())
+        }
+        Some("-p") if let Some(command) = user_inputs.get(1) => {
+            if let Some(completion) = completion_scripts.get(command) {
+                writeln!(output_direction, "complete -C '{completion}' {command}")
+            } else {
+                writeln!(
+                    err_direction,
+                    "complete: {command}: no completion specification"
+                )
+            }
+        }
+        _ => todo!(),
     }
 }
 
