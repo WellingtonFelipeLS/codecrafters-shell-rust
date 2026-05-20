@@ -22,6 +22,8 @@ fn main_loop(
     shell_variables: &mut HashMap<String, String>,
     background_jobs: &mut utils::BackGroundJobs,
 ) -> Result<(), io::Error> {
+    background_jobs.check_jobs()?;
+
     let readline = match editor.readline("$ ") {
         Ok(x) => x,
         Err(err) => panic!("{err:?}"),

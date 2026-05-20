@@ -280,15 +280,15 @@ impl BackGroundJobs {
         let second_most_recent_job = iter.next_back();
 
         iter.try_for_each(|(job_id, (input, child))| {
-            self.print_and_reap(job_id, input, child, writer, ' ')
+            self.print_and_reap(job_id, input, child, writer, ' ', true)
         })?;
 
         if let Some((job_id, (input, child))) = second_most_recent_job {
-            self.print_and_reap(job_id, input, child, writer, '-')?;
+            self.print_and_reap(job_id, input, child, writer, '-', true)?;
         };
 
         if let Some((job_id, (input, child))) = most_recent_job {
-            self.print_and_reap(job_id, input, child, writer, '+')?;
+            self.print_and_reap(job_id, input, child, writer, '+', true)?;
         }
 
         Ok(())
@@ -301,16 +301,40 @@ impl BackGroundJobs {
         mut child: process::Child,
         writer: &mut impl io::Write,
         marker: char,
+        print_running_processes: bool,
     ) -> io::Result<()> {
         match child.try_wait() {
             Ok(Some(_)) => writeln!(writer, "[{job_id}]{marker}  Done{:17}{input}", " "),
             Ok(None) => {
-                writeln!(writer, "[{job_id}]{marker}  Running{:17}{input} &", " ")?;
+                if print_running_processes {
+                    writeln!(writer, "[{job_id}]{marker}  Running{:17}{input} &", " ")?;
+                }
                 self.jobs.insert(job_id, (input, child));
 
                 Ok(())
             }
             Err(_) => todo!(),
         }
+    }
+
+    pub fn check_jobs(&mut self) -> io::Result<()> {
+        let mut iter = mem::take(&mut self.jobs).into_iter();
+
+        let most_recent_job = iter.next_back();
+        let second_most_recent_job = iter.next_back();
+
+        iter.try_for_each(|(job_id, (input, child))| {
+            self.print_and_reap(job_id, input, child, &mut io::stdout(), ' ', false)
+        })?;
+
+        if let Some((job_id, (input, child))) = second_most_recent_job {
+            self.print_and_reap(job_id, input, child, &mut io::stdout(), '-', false)?;
+        };
+
+        if let Some((job_id, (input, child))) = most_recent_job {
+            self.print_and_reap(job_id, input, child, &mut io::stdout(), '+', false)?;
+        }
+
+        Ok(())
     }
 }
