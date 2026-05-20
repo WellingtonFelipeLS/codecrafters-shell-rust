@@ -259,6 +259,8 @@ pub struct BackGroundJobs {
     jobs: BTreeMap<usize, (String, process::Child)>,
     job_id_heap: BinaryHeap<Reverse<usize>>,
     highest_id: usize,
+    most_recent_job_id: usize,
+    second_most_recent_job_id: usize,
 }
 
 impl BackGroundJobs {
@@ -267,6 +269,8 @@ impl BackGroundJobs {
             jobs: BTreeMap::new(),
             job_id_heap: BinaryHeap::new(),
             highest_id: 0,
+            most_recent_job_id: 0,
+            second_most_recent_job_id: 0,
         }
     }
 
@@ -284,74 +288,57 @@ impl BackGroundJobs {
             println!("[{}] {}", job_id, child.id());
 
             self.jobs.insert(job_id, (input.join(" "), child));
+
+            self.second_most_recent_job_id = self.most_recent_job_id;
+            self.most_recent_job_id = job_id;
         }
     }
 
     pub fn list(&mut self, writer: &mut impl io::Write) -> io::Result<()> {
-        let mut iter = mem::take(&mut self.jobs).into_iter();
-
-        let most_recent_job = iter.next_back();
-        let second_most_recent_job = iter.next_back();
-
-        iter.try_for_each(|(job_id, (input, child))| {
-            self.print_and_reap(job_id, input, child, writer, ' ', true)
-        })?;
-
-        if let Some((job_id, (input, child))) = second_most_recent_job {
-            self.print_and_reap(job_id, input, child, writer, '-', true)?;
-        };
-
-        if let Some((job_id, (input, child))) = most_recent_job {
-            self.print_and_reap(job_id, input, child, writer, '+', true)?;
-        }
-
-        Ok(())
-    }
-
-    fn print_and_reap(
-        &mut self,
-        job_id: usize,
-        input: String,
-        mut child: process::Child,
-        writer: &mut impl io::Write,
-        marker: char,
-        print_running_processes: bool,
-    ) -> io::Result<()> {
-        match child.try_wait() {
-            Ok(Some(_)) => {
-                self.job_id_heap.push(Reverse(job_id));
-                writeln!(writer, "[{job_id}]{marker}  Done{:17}{input}", " ")
-            }
-            Ok(None) => {
-                if print_running_processes {
-                    writeln!(writer, "[{job_id}]{marker}  Running{:17}{input} &", " ")?;
-                }
-                self.jobs.insert(job_id, (input, child));
-
-                Ok(())
-            }
-            Err(_) => todo!(),
-        }
+        self.list_and_reap_prototype(writer, true)
     }
 
     pub fn check_jobs(&mut self) -> io::Result<()> {
-        let mut iter = mem::take(&mut self.jobs).into_iter();
+        self.list_and_reap_prototype(&mut io::stdout(), false)
+    }
 
-        let most_recent_job = iter.next_back();
-        let second_most_recent_job = iter.next_back();
+    pub fn list_and_reap_prototype(
+        &mut self,
+        writer: &mut impl io::Write,
+        print_running_processes: bool,
+    ) -> io::Result<()> {
+        let prev_most_recent_job_id = mem::take(&mut self.most_recent_job_id);
+        let prev_second_most_recent_job_id = mem::take(&mut self.second_most_recent_job_id);
 
-        iter.try_for_each(|(job_id, (input, child))| {
-            self.print_and_reap(job_id, input, child, &mut io::stdout(), ' ', false)
-        })?;
+        mem::take(&mut self.jobs)
+            .into_iter()
+            .try_for_each(|(job_id, (input, mut child))| {
+                let marker = if job_id == prev_most_recent_job_id {
+                    '+'
+                } else if job_id == prev_second_most_recent_job_id {
+                    '-'
+                } else {
+                    ' '
+                };
 
-        if let Some((job_id, (input, child))) = second_most_recent_job {
-            self.print_and_reap(job_id, input, child, &mut io::stdout(), '-', false)?;
-        };
+                match child.try_wait() {
+                    Ok(Some(_)) => {
+                        self.job_id_heap.push(Reverse(job_id));
+                        writeln!(writer, "[{job_id}]{marker}  Done{:17}{input}", " ")
+                    }
+                    Ok(None) => {
+                        if print_running_processes {
+                            writeln!(writer, "[{job_id}]{marker}  Running{:17}{input} &", " ")?;
+                        }
+                        self.jobs.insert(job_id, (input, child));
 
-        if let Some((job_id, (input, child))) = most_recent_job {
-            self.print_and_reap(job_id, input, child, &mut io::stdout(), '+', false)?;
-        }
+                        self.second_most_recent_job_id = self.most_recent_job_id;
+                        self.most_recent_job_id = job_id;
 
-        Ok(())
+                        Ok(())
+                    }
+                    Err(_) => todo!(),
+                }
+            })
     }
 }
