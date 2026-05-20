@@ -1,4 +1,10 @@
-use std::{collections::BTreeMap, fs, io, mem, os::unix::fs::PermissionsExt, process};
+use std::{
+    cmp::Reverse,
+    collections::{BTreeMap, BinaryHeap},
+    fs, io, mem,
+    os::unix::fs::PermissionsExt,
+    process,
+};
 
 pub enum OutputDirection {
     File(fs::File),
@@ -251,14 +257,16 @@ pub fn verify_out_and_err_direction(
 
 pub struct BackGroundJobs {
     jobs: BTreeMap<usize, (String, process::Child)>,
-    next_job_id: usize,
+    job_id_heap: BinaryHeap<Reverse<usize>>,
+    highest_id: usize,
 }
 
 impl BackGroundJobs {
     pub fn new() -> Self {
         Self {
             jobs: BTreeMap::new(),
-            next_job_id: 1,
+            job_id_heap: BinaryHeap::new(),
+            highest_id: 0,
         }
     }
 
@@ -266,10 +274,16 @@ impl BackGroundJobs {
         if let Some((command, args)) = input.split_first()
             && let Some(child) = process::Command::new(command).args(args).spawn().ok()
         {
-            println!("[{}] {}", self.next_job_id, child.id());
+            let job_id = if let Some(value) = self.job_id_heap.pop() {
+                value.0
+            } else {
+                self.highest_id += 1;
+                self.highest_id
+            };
 
-            self.jobs.insert(self.next_job_id, (input.join(" "), child));
-            self.next_job_id += 1;
+            println!("[{}] {}", job_id, child.id());
+
+            self.jobs.insert(job_id, (input.join(" "), child));
         }
     }
 
@@ -304,7 +318,10 @@ impl BackGroundJobs {
         print_running_processes: bool,
     ) -> io::Result<()> {
         match child.try_wait() {
-            Ok(Some(_)) => writeln!(writer, "[{job_id}]{marker}  Done{:17}{input}", " "),
+            Ok(Some(_)) => {
+                self.job_id_heap.push(Reverse(job_id));
+                writeln!(writer, "[{job_id}]{marker}  Done{:17}{input}", " ")
+            }
             Ok(None) => {
                 if print_running_processes {
                     writeln!(writer, "[{job_id}]{marker}  Running{:17}{input} &", " ")?;
