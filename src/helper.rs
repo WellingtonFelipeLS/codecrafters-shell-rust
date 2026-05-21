@@ -81,8 +81,8 @@ impl MyHelper {
     fn complete_script_candidates(&self, line: &str) -> Option<(usize, Vec<Pair>)> {
         let mut words = line.split_whitespace();
 
-        let command = words.next()?;
-        let current = words.next_back().unwrap_or_default();
+        let command = line.split_whitespace().next()?;
+        let current = words.next_back()?;
         let prev = words.next_back().unwrap_or_default();
 
         if let Some(script) = self.completer_scripts.get(command)
@@ -95,8 +95,14 @@ impl MyHelper {
                 .output()
             && let Ok(stringified_output) = String::from_utf8(output.stdout)
         {
+            let pos = if current == command {
+                line.len()
+            } else {
+                line.len() - current.len()
+            };
+
             return Some((
-                line.len() - current.len(),
+                pos,
                 stringified_output
                     .lines()
                     .map(|candidate| Pair {
