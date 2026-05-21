@@ -78,6 +78,10 @@ impl MyHelper {
         self.completer_scripts.get(key)
     }
 
+    pub fn remove_completer_script(&mut self, key: &str) -> Option<String> {
+        self.completer_scripts.remove(key)
+    }
+
     fn complete_script_candidates(&self, line: &str) -> Option<(usize, Vec<Pair>)> {
         let mut words = line.split_whitespace();
 

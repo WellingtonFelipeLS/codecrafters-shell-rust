@@ -295,6 +295,10 @@ fn complete(
                 )
             }
         }
+        Some("-r") if let Some(command) = user_inputs.get(1) => {
+            helper.remove_completer_script(command);
+            Ok(())
+        }
         _ => todo!(),
     }
 }
