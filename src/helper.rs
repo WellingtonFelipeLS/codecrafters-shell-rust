@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, process};
 
 use rustyline::{
     Helper,
@@ -58,14 +58,24 @@ impl Trie {
 pub struct MyHelper {
     commands: Trie,
     file_completer: FilenameCompleter,
+    completer_scripts: HashMap<String, String>,
 }
 
 impl MyHelper {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             commands: Trie::new(),
             file_completer: FilenameCompleter::new(),
+            completer_scripts: HashMap::new(),
         }
+    }
+
+    pub fn insert_completer_script(&mut self, key: String, value: String) -> Option<String> {
+        self.completer_scripts.insert(key, value)
+    }
+
+    pub fn get_completer_script(&mut self, key: &str) -> Option<&String> {
+        self.completer_scripts.get(key)
     }
 }
 
@@ -95,10 +105,25 @@ impl Completer for MyHelper {
         ctx: &rustyline::Context<'_>,
     ) -> rustyline::Result<(usize, Vec<Self::Candidate>)> {
         if line.contains(" ") {
+            if let Some(script) = self.completer_scripts.get(line.trim_end())
+                && let Ok(output) = process::Command::new(script).output()
+                && let Ok(stringified_output) = String::from_utf8(output.stdout)
+            {
+                return Ok((
+                    pos,
+                    stringified_output
+                        .lines()
+                        .map(|candidate| Pair {
+                            display: String::from_iter([candidate, " "]),
+                            replacement: String::from_iter([candidate, " "]),
+                        })
+                        .collect(),
+                ));
+            }
+
             let (n, mut candidates) = self.file_completer.complete(line, pos, ctx)?;
 
-            if candidates.len() == 1
-                && let Some(x) = candidates.get_mut(0)
+            if let [x] = candidates.as_mut_slice()
                 && !x.replacement.ends_with("/")
             {
                 x.display.push(' ');
@@ -109,27 +134,25 @@ impl Completer for MyHelper {
                 .iter_mut()
                 .for_each(|x| x.display = x.replacement.clone());
 
-            Ok((n, candidates))
-        } else {
-            let mut candidates = self.commands.starts_with(line);
-
-            if candidates.len() == 1
-                && let Some(x) = candidates.get_mut(0)
-            {
-                x.push(' ')
-            }
-
-            Ok((
-                0,
-                candidates
-                    .into_iter()
-                    .map(|cmd| Pair {
-                        display: cmd.clone(),
-                        replacement: cmd,
-                    })
-                    .collect(),
-            ))
+            return Ok((n, candidates));
         }
+
+        let mut candidates = self.commands.starts_with(line);
+
+        if let [x] = candidates.as_mut_slice() {
+            x.push(' ');
+        }
+
+        Ok((
+            0,
+            candidates
+                .into_iter()
+                .map(|cmd| Pair {
+                    display: cmd.clone(),
+                    replacement: cmd,
+                })
+                .collect(),
+        ))
     }
 }
 

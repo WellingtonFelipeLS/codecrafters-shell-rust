@@ -1,5 +1,11 @@
-use crate::utils;
-use rustyline::history::{self, History};
+use crate::{
+    helper::{self, MyHelper},
+    utils,
+};
+use rustyline::{
+    Editor,
+    history::{self, History},
+};
 use std::{
     collections::{HashMap, HashSet},
     env, ffi, fs,
@@ -7,17 +13,18 @@ use std::{
     path, process,
 };
 
+use rustyline::history::FileHistory;
+
 #[allow(clippy::too_many_arguments)]
 pub fn call_command_with_args<I>(
     mut user_inputs: Vec<String>,
     builtins: &HashSet<&str>,
     executable_paths: &[&fs::DirEntry],
-    history: &mut history::FileHistory,
+    editor: &mut Editor<helper::MyHelper, FileHistory>,
     input_reader: Option<I>,
     children: &mut Vec<process::Child>,
     shell_variables: &mut HashMap<String, String>,
     background_jobs: &mut utils::BackGroundJobs,
-    completion_scripts: &mut HashMap<String, String>,
     process_position: utils::ProcessPosition,
 ) -> io::Result<Option<io::PipeReader>>
 where
@@ -34,7 +41,7 @@ where
         utils::verify_out_and_err_direction(&mut user_inputs, pipe_writer)?;
 
     match user_inputs.first().map(String::as_str) {
-        Some("exit") => exit(history),
+        Some("exit") => exit(editor.history_mut()),
         Some("echo") => echo(&user_inputs[1..], output_direction),
         Some("type") => type_command(
             &user_inputs[1..],
@@ -45,9 +52,12 @@ where
         ),
         Some("pwd") => pwd(output_direction),
         Some("cd") => cd(&user_inputs[1..], err_direction),
-        Some("history") => {
-            history_command(&user_inputs[1..], history, output_direction, err_direction)
-        }
+        Some("history") => history_command(
+            &user_inputs[1..],
+            editor.history_mut(),
+            output_direction,
+            err_direction,
+        ),
         Some("declare") => declare(
             &user_inputs[1..],
             shell_variables,
@@ -57,7 +67,7 @@ where
         Some("jobs") => jobs(background_jobs, output_direction),
         Some("complete") => complete(
             &user_inputs[1..],
-            completion_scripts,
+            editor.helper_mut().expect("Expect custom helper setted"),
             output_direction,
             err_direction,
         ),
@@ -160,7 +170,6 @@ fn cd(user_inputs: &[String], mut err_direction: utils::ErrDirection) -> io::Res
 
 fn history_command(
     user_inputs: &[String],
-
     history: &mut history::FileHistory,
     mut output_direction: utils::OutputDirection,
     mut err_direction: utils::ErrDirection,
@@ -267,17 +276,17 @@ fn jobs(
 
 fn complete(
     user_inputs: &[String],
-    completion_scripts: &mut HashMap<String, String>,
+    helper: &mut MyHelper,
     mut output_direction: utils::OutputDirection,
     mut err_direction: utils::ErrDirection,
 ) -> io::Result<()> {
     match user_inputs.first().map(String::as_str) {
         Some("-C") if let Some([path, command]) = user_inputs.get(1..=2) => {
-            completion_scripts.insert(command.clone(), path.clone());
+            helper.insert_completer_script(command.clone(), path.clone());
             Ok(())
         }
         Some("-p") if let Some(command) = user_inputs.get(1) => {
-            if let Some(completion) = completion_scripts.get(command) {
+            if let Some(completion) = helper.get_completer_script(command) {
                 writeln!(output_direction, "complete -C '{completion}' {command}")
             } else {
                 writeln!(
@@ -306,7 +315,7 @@ where
     child_command.args(user_inputs.iter().map(ffi::OsStr::new));
 
     if !process_position.is_first() {
-        child_command.stdin(input_reader.expect("Expect input reader in first process"));
+        child_command.stdin(input_reader.expect("Expect input reader in not first process"));
     }
 
     child_command.stdout(output_direction).stderr(err_direction);
