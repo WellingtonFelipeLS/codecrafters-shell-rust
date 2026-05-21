@@ -88,6 +88,10 @@ impl MyHelper {
         if let Some(script) = self.completer_scripts.get(command)
             && let Ok(output) = process::Command::new(script)
                 .args([command, current, prev])
+                .envs([
+                    ("COMP_LINE", line.trim_end()),
+                    ("COMP_POINT", &line.len().to_string()),
+                ])
                 .output()
             && let Ok(stringified_output) = String::from_utf8(output.stdout)
         {
