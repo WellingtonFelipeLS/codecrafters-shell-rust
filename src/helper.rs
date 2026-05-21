@@ -77,6 +77,34 @@ impl MyHelper {
     pub fn get_completer_script(&mut self, key: &str) -> Option<&String> {
         self.completer_scripts.get(key)
     }
+
+    fn complete_script_candidates(&self, line: &str) -> Option<(usize, Vec<Pair>)> {
+        let mut words = line.split_whitespace();
+
+        let command = words.next()?;
+        let current = words.next_back().unwrap_or_default();
+        let prev = words.next_back().unwrap_or_default();
+
+        if let Some(script) = self.completer_scripts.get(command)
+            && let Ok(output) = process::Command::new(script)
+                .args([command, current, prev])
+                .output()
+            && let Ok(stringified_output) = String::from_utf8(output.stdout)
+        {
+            return Some((
+                line.len() - current.len(),
+                stringified_output
+                    .lines()
+                    .map(|candidate| Pair {
+                        display: String::from_iter([candidate, " "]),
+                        replacement: String::from_iter([candidate, " "]),
+                    })
+                    .collect(),
+            ));
+        }
+
+        None
+    }
 }
 
 impl<'a, T> From<T> for MyHelper
@@ -105,20 +133,8 @@ impl Completer for MyHelper {
         ctx: &rustyline::Context<'_>,
     ) -> rustyline::Result<(usize, Vec<Self::Candidate>)> {
         if line.contains(" ") {
-            if let Some(script) = self.completer_scripts.get(line.trim_end())
-                && let Ok(output) = process::Command::new(script).output()
-                && let Ok(stringified_output) = String::from_utf8(output.stdout)
-            {
-                return Ok((
-                    pos,
-                    stringified_output
-                        .lines()
-                        .map(|candidate| Pair {
-                            display: String::from_iter([candidate, " "]),
-                            replacement: String::from_iter([candidate, " "]),
-                        })
-                        .collect(),
-                ));
+            if let Some(completion_pair) = self.complete_script_candidates(line) {
+                return Ok(completion_pair);
             }
 
             let (n, mut candidates) = self.file_completer.complete(line, pos, ctx)?;
